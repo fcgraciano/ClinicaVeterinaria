@@ -4,25 +4,35 @@ Projeto prático em PHP + Bootstrap + MySQL.
 
 ## Como rodar
 
+Baixando o projeto na escola
+abrir CMD
+cd c:/xampp/htdocs
+git clone https://github.com/fcgraciano/ClinicaVeterinaria
+cd ClinicaVeterinaria
+code .
+
+depois que o projeto já está baixado na maquina
+
+git pull
+
 1. Coloque a pasta em `C:\xampp\htdocs\ClinicaVeterinaria`
 2. Ligue o **Apache** e o **MySQL** no XAMPP
 3. No phpMyAdmin, rode `banco/00_criar_banco.sql`
+Não esqueça das atualizações de bancos posteriores
 4. Abra `http://localhost/ClinicaVeterinaria`
 
 ## Pastas
 
 ```
-patas-e-cia/
+ClinicaVeterinaria/
 ├── includes/
 │   ├── conexao.php     ← conexão com o banco
 │   ├── cabecalho.php   ← topo da página + menu
 │   └── rodape.php      ← fim da página
 ├── css/estilo.css
 ├── banco/              ← arquivos .sql (um por grupo)
-├── inicio/             ← página inicial
-├── exemplo/            ← exemplo de listar, cadastrar e excluir
-└── cadastro/  agendamento/  prontuario/  vacinas/
-    estoque/   financeiro/   relatorios/  seguranca/   ← pastas dos grupos
+└── inicio/             ← página inicial
+ 
 ```
 
 ## Como criar uma página nova
