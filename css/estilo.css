@@ -1,0 +1,33 @@
+/* CSS do sistema todo */
+
+body {
+    background-color: #f6f8f7;
+}
+
+/* Barra do menu */
+.barra-topo {
+    background-color: #0f766e;
+}
+
+.barra-topo .navbar-brand i {
+    color: #f59e0b;
+}
+
+/* Faixa de boas-vindas da página inicial */
+.boas-vindas {
+    background-color: #0f766e;
+    color: white;
+    border-radius: 16px;
+    padding: 40px;
+    margin-bottom: 24px;
+}
+
+/* Cards dos módulos na página inicial */
+.card-modulo:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.card-modulo i {
+    font-size: 2rem;
+    color: #0f766e;
+}
