@@ -23,7 +23,11 @@
     <div class="col-6 col-lg-3">
         <a href="aplicacao/index.php" class="card card-modulo h-100 text-decoration-none">
             <div class="card-body">
-                <i class="bi bi-syringe"></i>
+                <svg class="icone-seringa" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m3 21 4-4m-1-1 8-8 2 2-8 8m7-9 4-4m-2-2 4 4" />
+                    <path d="m9 13 2 2m0-4 2 2m0-4 2 2" />
+                </svg>
                 <h3 class="h6 mt-2 text-dark">Aplicação Vacinas</h3>
                 <p class="small text-secondary mb-0">Registro das doses aplicadas</p>
             </div>

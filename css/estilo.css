@@ -6,7 +6,7 @@ body {
 
 /* Barra do menu */
 .barra-topo {
-    background-color: #0f766e;
+    background-color: #0f766e; 
 }
 
 .barra-topo .navbar-brand i {
@@ -30,4 +30,16 @@ body {
 .card-modulo i {
     font-size: 2rem;
     color: #0f766e;
+}
+
+/* Botão principal do sistema (na cor do tema) */
+.btn-sistema {
+    background-color: #0f766e;
+    color: #fff;
+}
+
+.btn-sistema:hover,
+.btn-sistema:focus {
+    background-color: #0b5c56;
+    color: #fff;
 }

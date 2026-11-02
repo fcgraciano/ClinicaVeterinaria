@@ -1,4 +1,10 @@
 <!doctype html>
+<?php
+// Caminho relativo até a raiz do sistema.
+// Páginas dentro de subpastas devem definir $base antes de incluir este arquivo.
+// Ex.: $base = '../../';
+$base = $base ?? '../';
+?>
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
@@ -10,7 +16,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
     <!-- Nosso CSS -->
-    <link rel="stylesheet" href="../css/estilo.css">
+    <link rel="stylesheet" href="<?= $base ?>css/estilo.css">
+    <link rel="stylesheet" href="<?= $base ?>css/vacinas.css">
 </head>
 <body>
 
@@ -18,7 +25,7 @@
 <!-- Os links de cada módulo ficam no arquivo menu.php da pasta do grupo -->
 <nav class="navbar navbar-expand-lg navbar-dark barra-topo">
     <div class="container">
-        <a class="navbar-brand" href="../inicio/index.php">
+        <a class="navbar-brand" href="<?= $base ?>inicio/index.php">
             <i class="bi bi-heart-pulse-fill"></i> Patas & Cia
         </a>
 
@@ -30,10 +37,10 @@
             <ul class="navbar-nav ms-auto">
 
                 <li class="nav-item">
-                    <a class="nav-link" href="../inicio/index.php">Início</a>
+                    <a class="nav-link" href="<?= $base ?>inicio/index.php">Início</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="../vacinas1/index.php">Vacinas</a>
+                    <a class="nav-link" href="<?= $base ?>vacinas1/index.php">Vacinas</a>
                 </li>
               
 
