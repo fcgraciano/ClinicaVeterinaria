@@ -40,7 +40,7 @@
     </div>
 
     <div class="col-6 col-lg-3">
-        <a href="../vacinas/index.php" class="card card-modulo h-100 text-decoration-none">
+        <a href="../vacinas1/index.php" class="card card-modulo h-100 text-decoration-none">
             <div class="card-body">
                 <i class="bi bi-shield-plus"></i>
                 <h3 class="h6 mt-2 text-dark">Vacinas</h3>

@@ -32,7 +32,9 @@
                 <li class="nav-item">
                     <a class="nav-link" href="../inicio/index.php">Início</a>
                 </li>
-
+                <li class="nav-item">
+                    <a class="nav-link" href="../vacinas1/index.php">Vacinas</a>
+                </li>
               
 
             </ul>
