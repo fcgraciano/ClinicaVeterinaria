@@ -35,6 +35,12 @@ function numero_br($valor)
     return is_numeric($valor) ? (float) $valor : null;
 }
 
+// Formata um valor em reais (ex.: 12.5 -> R$ 12,50)
+function moeda_br($valor)
+{
+    return 'R$ ' . number_format((float) $valor, 2, ',', '.');
+}
+
 // Calcula a idade a partir da data de nascimento (AAAA-MM-DD)
 function idade($data)
 {

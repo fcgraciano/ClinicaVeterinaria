@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tipo       = trim($_POST['tipo'] ?? '');
     $validade   = trim($_POST['validade'] ?? '');
     $quantidade = trim($_POST['quantidade'] ?? '');
+    $valor      = numero_br($_POST['valor'] ?? '');
 
     if ($tipo === '') {
         $erro = 'Informe o tipo da vacina.';
@@ -19,12 +20,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erro = 'Informe uma data de validade válida.';
     } elseif (!ctype_digit($quantidade)) {
         $erro = 'Informe a quantidade do lote (somente números).';
+    } elseif ($valor === null || $valor < 0 || $valor > 99999999.99) {
+        $erro = 'Informe o preço da vacina (ex.: 45,90).';
     } else {
         $qtd = (int) $quantidade;
 
-        $sql = 'INSERT INTO vacinas (TipoVacina, DataValidade, QuantidadeLote) VALUES (?, ?, ?)';
+        $sql = 'INSERT INTO vacinas (TipoVacina, DataValidade, QuantidadeLote, Valor) VALUES (?, ?, ?, ?)';
         $stmt = mysqli_prepare($conexao, $sql);
-        mysqli_stmt_bind_param($stmt, 'ssi', $tipo, $validade, $qtd);
+        mysqli_stmt_bind_param($stmt, 'ssid', $tipo, $validade, $qtd, $valor);
 
         if (mysqli_stmt_execute($stmt)) {
             header('Location: index.php?ok=1');
@@ -36,9 +39,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $lotes = mysqli_fetch_all(
-    mysqli_query($conexao, 'SELECT Vacinaid, TipoVacina, DataValidade, QuantidadeLote FROM vacinas ORDER BY DataValidade, TipoVacina'),
+    mysqli_query(
+        $conexao,
+        'SELECT Vacinaid, TipoVacina, DataValidade, QuantidadeLote, Valor
+           FROM vacinas
+          ORDER BY DataValidade, TipoVacina'
+    ),
     MYSQLI_ASSOC
 );
+
+$hoje = date('Y-m-d');
+$lotesValidos = [];
+$lotesVencidos = [];
+
+foreach ($lotes as $lote) {
+    if ($lote['DataValidade'] < $hoje) {
+        $lotesVencidos[] = $lote;
+    } else {
+        $lotesValidos[] = $lote;
+    }
+}
 ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
@@ -62,7 +82,7 @@ $lotes = mysqli_fetch_all(
 <div class="row g-4">
 
     <div class="col-12 col-lg-5">
-        <div class="card h-100">
+        <div class="card">
             <div class="card-body">
                 <h2 class="h6 mb-3">
                     <i class="bi bi-plus-circle me-1"></i> Novo lote
@@ -90,6 +110,13 @@ $lotes = mysqli_fetch_all(
                     </div>
 
                     <div class="col-12">
+                        <label for="valor" class="form-label">Valor (R$)</label>
+                        <input type="text" class="form-control" id="valor" name="valor"
+                               inputmode="decimal" required placeholder="Ex.: 45,90"
+                               value="<?= h($_POST['valor'] ?? '') ?>">
+                    </div>
+
+                    <div class="col-12">
                         <button type="submit" class="btn btn-sistema">
                             <i class="bi bi-check-lg"></i> Salvar lote
                         </button>
@@ -100,41 +127,42 @@ $lotes = mysqli_fetch_all(
     </div>
 
     <div class="col-12 col-lg-7">
-        <div class="card h-100">
-            <div class="card-body">
-                <h2 class="h6 mb-3">
-                    <i class="bi bi-list-ul me-1"></i> Lotes cadastrados
-                </h2>
 
+        <div class="card border-success mb-4">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
+                    <i class="bi bi-check-circle me-1"></i> Lotes dentro da validade
+                </span>
+                <span class="badge text-bg-light text-success"><?= count($lotesValidos) ?></span>
+            </div>
+
+            <div class="card-body bg-success-subtle">
                 <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
+                    <table class="table table-sm table-success align-middle mb-0">
                         <thead>
                             <tr>
                                 <th>Vacina</th>
                                 <th>Validade</th>
                                 <th class="text-end">Quantidade</th>
+                                <th class="text-end">Preço</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (count($lotes) === 0): ?>
+                            <?php if (count($lotesValidos) === 0): ?>
                                 <tr>
-                                    <td colspan="3" class="text-center text-secondary py-3">
-                                        Nenhum lote cadastrado.
+                                    <td colspan="4" class="text-center text-secondary py-3">
+                                        Nenhum lote dentro da validade.
                                     </td>
                                 </tr>
                             <?php else: ?>
-                                <?php foreach ($lotes as $lote): ?>
+                                <?php foreach ($lotesValidos as $lote): ?>
                                     <tr>
                                         <td><?= h($lote['TipoVacina']) ?></td>
-                                        <td>
-                                            <?= data_br($lote['DataValidade']) ?>
-                                            <?php if ($lote['DataValidade'] < date('Y-m-d')): ?>
-                                                <span class="badge text-bg-danger">Vencido</span>
-                                            <?php endif; ?>
-                                        </td>
+                                        <td><?= data_br($lote['DataValidade']) ?></td>
                                         <td class="text-end">
                                             <?= $lote['QuantidadeLote'] === null ? '—' : (int) $lote['QuantidadeLote'] ?>
                                         </td>
+                                        <td class="text-end"><?= moeda_br($lote['Valor']) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -143,6 +171,51 @@ $lotes = mysqli_fetch_all(
                 </div>
             </div>
         </div>
+
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Lotes vencidos
+                </span>
+                <span class="badge text-bg-light text-danger"><?= count($lotesVencidos) ?></span>
+            </div>
+
+            <div class="card-body bg-danger-subtle">
+                <div class="table-responsive">
+                    <table class="table table-sm table-danger align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Vacina</th>
+                                <th>Validade</th>
+                                <th class="text-end">Quantidade</th>
+                                <th class="text-end">Preço</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (count($lotesVencidos) === 0): ?>
+                                <tr>
+                                    <td colspan="4" class="text-center text-secondary py-3">
+                                        Nenhum lote vencido.
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($lotesVencidos as $lote): ?>
+                                    <tr>
+                                        <td><?= h($lote['TipoVacina']) ?></td>
+                                        <td><?= data_br($lote['DataValidade']) ?></td>
+                                        <td class="text-end">
+                                            <?= $lote['QuantidadeLote'] === null ? '—' : (int) $lote['QuantidadeLote'] ?>
+                                        </td>
+                                        <td class="text-end"><?= moeda_br($lote['Valor']) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
     </div>
 
 </div>

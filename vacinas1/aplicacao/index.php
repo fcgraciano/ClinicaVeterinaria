@@ -6,6 +6,15 @@ include __DIR__ . '/../../includes/funcoes.php';
 
 $erro = '';
 
+$mensagensOk = [
+    'aplicacao' => 'Aplicação registrada e estoque atualizado!',
+    'pagamento' => 'Status de pagamento atualizado!',
+];
+$ok = $_GET['ok'] ?? '';
+if (!is_string($ok)) {
+    $ok = '';
+}
+
 $animais = mysqli_fetch_all(
     mysqli_query(
         $conexao,
@@ -17,11 +26,124 @@ $animais = mysqli_fetch_all(
 );
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $acao = $_POST['acao'] ?? 'aplicar';
+
+    // Alterna o pagamento de uma aplicação já registrada
+    if ($acao === 'alternar_pagamento') {
+        $aplicacaoid = (int) ($_POST['aplicacaoid'] ?? 0);
+        $erroPagamento = '';
+
+        if ($aplicacaoid > 0) {
+            $stmt = mysqli_prepare(
+                $conexao,
+                'SELECT Aplicacaoid, Pago, Pagamentoid, Valor, Animalid, TipoVacina, dose
+                   FROM vacinas_aplicacadas
+                  WHERE Aplicacaoid = ?'
+            );
+            mysqli_stmt_bind_param($stmt, 'i', $aplicacaoid);
+            mysqli_stmt_execute($stmt);
+            $resultado = mysqli_stmt_get_result($stmt);
+            $aplicacaoAtual = $resultado ? mysqli_fetch_assoc($resultado) : null;
+
+            if ($aplicacaoAtual) {
+                mysqli_begin_transaction($conexao);
+
+                try {
+                    if ((int) $aplicacaoAtual['Pago'] === 1) {
+                        // Desmarca como pago e remove o lançamento do financeiro
+                        if (!empty($aplicacaoAtual['Pagamentoid'])) {
+                            $stmt = mysqli_prepare($conexao, 'DELETE FROM pagamentos WHERE Pagamentoid = ?');
+                            mysqli_stmt_bind_param($stmt, 'i', $aplicacaoAtual['Pagamentoid']);
+
+                            if (!mysqli_stmt_execute($stmt)) {
+                                throw new Exception('Erro ao remover o pagamento: ' . mysqli_error($conexao));
+                            }
+                        }
+
+                        $stmt = mysqli_prepare(
+                            $conexao,
+                            'UPDATE vacinas_aplicacadas SET Pago = 0, Pagamentoid = NULL WHERE Aplicacaoid = ?'
+                        );
+                        mysqli_stmt_bind_param($stmt, 'i', $aplicacaoid);
+
+                        if (!mysqli_stmt_execute($stmt)) {
+                            throw new Exception('Erro ao atualizar o pagamento: ' . mysqli_error($conexao));
+                        }
+                    } else {
+                        // Marca como pago e lança no financeiro
+                        $valor = (float) $aplicacaoAtual['Valor'];
+
+                        // Aplicações antigas não tinham o valor salvo: busca pelo lote
+                        if ($valor <= 0) {
+                            $stmt = mysqli_prepare(
+                                $conexao,
+                                'SELECT Valor
+                                   FROM vacinas
+                                  WHERE TipoVacina = ?
+                                    AND Valor > 0
+                                  ORDER BY DataValidade DESC
+                                  LIMIT 1'
+                            );
+                            mysqli_stmt_bind_param($stmt, 's', $aplicacaoAtual['TipoVacina']);
+                            mysqli_stmt_execute($stmt);
+                            $resultado = mysqli_stmt_get_result($stmt);
+                            $lote = $resultado ? mysqli_fetch_assoc($resultado) : null;
+
+                            if ($lote) {
+                                $valor = round((float) $lote['Valor'] * (int) $aplicacaoAtual['dose'], 2);
+                            }
+                        }
+
+                        $dataPagamento = date('Y-m-d');
+                        $animalid = (int) $aplicacaoAtual['Animalid'];
+
+                        $stmt = mysqli_prepare(
+                            $conexao,
+                            'INSERT INTO pagamentos (Valor, DataPagamento, Animalid) VALUES (?, ?, ?)'
+                        );
+                        mysqli_stmt_bind_param($stmt, 'dsi', $valor, $dataPagamento, $animalid);
+
+                        if (!mysqli_stmt_execute($stmt)) {
+                            throw new Exception('Erro ao registrar o pagamento: ' . mysqli_error($conexao));
+                        }
+
+                        $pagamentoid = mysqli_insert_id($conexao);
+
+                        $stmt = mysqli_prepare(
+                            $conexao,
+                            'UPDATE vacinas_aplicacadas
+                                SET Pago = 1, Pagamentoid = ?, Valor = ?
+                              WHERE Aplicacaoid = ?'
+                        );
+                        mysqli_stmt_bind_param($stmt, 'idi', $pagamentoid, $valor, $aplicacaoid);
+
+                        if (!mysqli_stmt_execute($stmt)) {
+                            throw new Exception('Erro ao atualizar o pagamento: ' . mysqli_error($conexao));
+                        }
+                    }
+
+                    mysqli_commit($conexao);
+                } catch (Exception $e) {
+                    mysqli_rollback($conexao);
+                    $erroPagamento = $e->getMessage();
+                }
+            }
+        }
+
+        if ($erroPagamento === '') {
+            header('Location: index.php?ok=pagamento');
+        } else {
+            header('Location: index.php?erro_pagamento=1');
+        }
+        exit;
+    }
+
     $animalid  = (int) ($_POST['animalid'] ?? 0);
     $vacinaid  = (int) ($_POST['vacinaid'] ?? 0);
     $dose      = trim($_POST['dose'] ?? '');
     $aplicacao = trim($_POST['aplicacao'] ?? '');
     $retorno   = trim($_POST['retorno'] ?? '');
+    $pago      = ($_POST['pago'] ?? '0') === '1' ? 1 : 0;
 
     if ($animalid <= 0) {
         $erro = 'Selecione o animal.';
@@ -49,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Busca o lote escolhido
             $stmt = mysqli_prepare(
                 $conexao,
-                'SELECT Vacinaid, TipoVacina, QuantidadeLote, DataValidade
+                'SELECT Vacinaid, TipoVacina, QuantidadeLote, DataValidade, Valor
                    FROM vacinas
                   WHERE Vacinaid = ?'
             );
@@ -68,6 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $doseInt = (int) $dose;
                 $retornoParam = $retorno === '' ? null : $retorno;
                 $tipo = $vacina['TipoVacina'];
+                $valorAplicacao = round($doseInt * (float) $vacina['Valor'], 2);
 
                 mysqli_begin_transaction($conexao);
 
@@ -88,18 +211,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Registra a aplicação
                     $stmt = mysqli_prepare(
                         $conexao,
-                        'INSERT INTO vacinas_aplicacadas (DataAplicacao, Retorno, dose, TipoVacina, Animalid)
-                         VALUES (?, ?, ?, ?, ?)'
+                        'INSERT INTO vacinas_aplicacadas
+                            (DataAplicacao, Retorno, dose, TipoVacina, Animalid, Pago, Valor)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)'
                     );
-                    mysqli_stmt_bind_param($stmt, 'ssisi', $aplicacao, $retornoParam, $doseInt, $tipo, $animalid);
+                    mysqli_stmt_bind_param(
+                        $stmt,
+                        'ssisiid',
+                        $aplicacao,
+                        $retornoParam,
+                        $doseInt,
+                        $tipo,
+                        $animalid,
+                        $pago,
+                        $valorAplicacao
+                    );
 
                     if (!mysqli_stmt_execute($stmt)) {
                         throw new Exception('Erro ao salvar a aplicação: ' . mysqli_error($conexao));
                     }
 
+                    $aplicacaoid = mysqli_insert_id($conexao);
+
+                    // Se já foi marcada como paga, registra no financeiro
+                    if ($pago === 1) {
+                        $dataPagamento = date('Y-m-d');
+
+                        $stmt = mysqli_prepare(
+                            $conexao,
+                            'INSERT INTO pagamentos (Valor, DataPagamento, Animalid) VALUES (?, ?, ?)'
+                        );
+                        mysqli_stmt_bind_param($stmt, 'dsi', $valorAplicacao, $dataPagamento, $animalid);
+
+                        if (!mysqli_stmt_execute($stmt)) {
+                            throw new Exception('Erro ao registrar o pagamento: ' . mysqli_error($conexao));
+                        }
+
+                        $pagamentoid = mysqli_insert_id($conexao);
+
+                        $stmt = mysqli_prepare(
+                            $conexao,
+                            'UPDATE vacinas_aplicacadas SET Pagamentoid = ? WHERE Aplicacaoid = ?'
+                        );
+                        mysqli_stmt_bind_param($stmt, 'ii', $pagamentoid, $aplicacaoid);
+
+                        if (!mysqli_stmt_execute($stmt)) {
+                            throw new Exception('Erro ao vincular o pagamento: ' . mysqli_error($conexao));
+                        }
+                    }
+
                     mysqli_commit($conexao);
 
-                    header('Location: index.php?ok=1');
+                    header('Location: index.php?ok=aplicacao');
                     exit;
                 } catch (Exception $e) {
                     mysqli_rollback($conexao);
@@ -108,6 +271,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
+
+if ($erro === '' && isset($_GET['erro_pagamento'])) {
+    $erro = 'Não foi possível atualizar o pagamento. Tente novamente.';
 }
 
 // Lotes disponíveis para aplicação (com estoque e dentro da validade)
@@ -134,10 +301,12 @@ if (isset($_POST['animalid'])) {
     }
 }
 
+$pagoSelecionado = ($_POST['pago'] ?? '0') === '1';
+
 $aplicacoes = mysqli_fetch_all(
     mysqli_query(
         $conexao,
-        'SELECT ap.Aplicacaoid, ap.DataAplicacao, ap.Retorno, ap.dose, ap.TipoVacina, an.Nome AS Animal
+        'SELECT ap.Aplicacaoid, ap.DataAplicacao, ap.Retorno, ap.dose, ap.TipoVacina, ap.Pago, an.Nome AS Animal
            FROM vacinas_aplicacadas ap
            LEFT JOIN animais an ON an.Animalid = ap.Animalid
           ORDER BY ap.DataAplicacao DESC, ap.Aplicacaoid DESC'
@@ -160,8 +329,8 @@ $aplicacoes = mysqli_fetch_all(
     <div class="alert alert-danger"><?= h($erro) ?></div>
 <?php endif; ?>
 
-<?php if (isset($_GET['ok'])): ?>
-    <div class="alert alert-success">Aplicação registrada e estoque atualizado!</div>
+<?php if (isset($mensagensOk[$ok])): ?>
+    <div class="alert alert-success"><?= h($mensagensOk[$ok]) ?></div>
 <?php endif; ?>
 
 <?php if (count($animais) === 0): ?>
@@ -189,10 +358,12 @@ $aplicacoes = mysqli_fetch_all(
                 </h2>
 
                 <form method="post" action="index.php" id="formAplicacao" class="row g-3" novalidate>
+                    <input type="hidden" name="acao" value="aplicar">
                     <input type="hidden" name="animalid" id="animalid"
                            value="<?= $animalSelecionado ? (int) $animalSelecionado['Animalid'] : '' ?>">
                     <input type="hidden" name="vacinaid" id="vacinaid" value="">
                     <input type="hidden" name="dose" id="dose" value="">
+                    <input type="hidden" name="pago" id="pago" value="<?= $pagoSelecionado ? '1' : '0' ?>">
 
                     <div class="col-12">
                         <label class="form-label">Animal</label>
@@ -222,24 +393,43 @@ $aplicacoes = mysqli_fetch_all(
                         </div>
                     </div>
 
-                    <div class="col-12 col-sm-6">
+                    <div class="col-12 col-sm-4">
                         <label for="aplicacao" class="form-label">Data da aplicação</label>
                         <input type="date" class="form-control" id="aplicacao" name="aplicacao"
                                required value="<?= h($_POST['aplicacao'] ?? date('Y-m-d')) ?>">
                     </div>
 
-                    <div class="col-12 col-sm-6">
+                    <div class="col-12 col-sm-4">
                         <label for="retorno" class="form-label">Retorno (opcional)</label>
                         <input type="date" class="form-control" id="retorno" name="retorno"
                                value="<?= h($_POST['retorno'] ?? '') ?>">
                     </div>
 
+                    <div class="col-12 col-sm-4">
+                        <label class="form-label d-block">Pagamento</label>
+                        <button type="button" id="botaoPago"
+                                class="btn w-100 <?= $pagoSelecionado ? 'btn-success' : 'btn-danger' ?>"
+                                aria-pressed="<?= $pagoSelecionado ? 'true' : 'false' ?>">
+                            <?= $pagoSelecionado ? 'PAGO' : 'NÃO PAGO' ?>
+                        </button>
+                    </div>
+
                     <div class="col-12">
                         <div class="alert alert-light border small mb-0">
                             <i class="bi bi-info-circle me-1"></i>
-                            Selecione o animal, confira a data e clique em
-                            <strong>Escolher vacina e quantidade</strong> para aplicar a dose.
+                            Selecione o animal, confira a data, escolha a vacina e a quantidade
+                            e clique em <strong>Aplicar</strong>.
                         </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div id="erroAplicacao" class="alert alert-danger d-none" role="alert"></div>
+
+                        <button type="button" id="botaoAplicarVacina"
+                                class="btn btn-sistema btn-lg w-100"
+                                <?= (count($animais) === 0 || count($vacinas) === 0) ? 'disabled' : '' ?>>
+                            <i class="bi bi-syringe me-1"></i> Aplicar
+                        </button>
                     </div>
                 </form>
             </div>
@@ -262,12 +452,13 @@ $aplicacoes = mysqli_fetch_all(
                                 <th class="text-end">Dose</th>
                                 <th>Aplicação</th>
                                 <th>Retorno</th>
+                                <th>Pagamento</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (count($aplicacoes) === 0): ?>
                                 <tr>
-                                    <td colspan="5" class="text-center text-secondary py-3">
+                                    <td colspan="6" class="text-center text-secondary py-3">
                                         Nenhuma aplicação registrada.
                                     </td>
                                 </tr>
@@ -279,6 +470,16 @@ $aplicacoes = mysqli_fetch_all(
                                         <td class="text-end"><?= (int) $item['dose'] ?></td>
                                         <td><?= data_br($item['DataAplicacao']) ?></td>
                                         <td><?= data_br($item['Retorno']) ?></td>
+                                        <td>
+                                            <form method="post" action="index.php" class="d-inline">
+                                                <input type="hidden" name="acao" value="alternar_pagamento">
+                                                <input type="hidden" name="aplicacaoid" value="<?= (int) $item['Aplicacaoid'] ?>">
+                                                <button type="submit"
+                                                        class="btn btn-sm <?= (int) $item['Pago'] === 1 ? 'btn-success' : 'btn-danger' ?>">
+                                                    <?= (int) $item['Pago'] === 1 ? 'PAGO' : 'NÃO PAGO' ?>
+                                                </button>
+                                            </form>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -363,8 +564,6 @@ $aplicacoes = mysqli_fetch_all(
             </div>
 
             <div class="modal-body">
-                <div id="erroVacina" class="alert alert-danger d-none" role="alert"></div>
-
                 <div class="input-group mb-3">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
                     <input type="search" class="form-control" id="buscaVacina"
@@ -382,11 +581,11 @@ $aplicacoes = mysqli_fetch_all(
                         <table class="table align-middle mb-0">
                             <thead>
                                 <tr>
+                                    <th></th>
                                     <th>Vacina</th>
                                     <th>Validade</th>
                                     <th class="text-end">Disponível</th>
                                     <th class="text-center">Quantidade</th>
-                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="listaVacinas">
@@ -398,6 +597,11 @@ $aplicacoes = mysqli_fetch_all(
                                     );
                                     ?>
                                     <tr class="vacina-opcao" data-busca="<?= h($buscaVacina) ?>">
+                                        <td class="text-center">
+                                            <input type="radio" class="form-check-input vacina-radio"
+                                                   name="vacina_escolhida" value="<?= (int) $vacina['Vacinaid'] ?>"
+                                                   aria-label="Selecionar <?= h($vacina['TipoVacina']) ?>">
+                                        </td>
                                         <td>
                                             <i class="bi bi-syringe me-1 text-secondary"></i>
                                             <strong><?= h($vacina['TipoVacina']) ?></strong>
@@ -419,13 +623,6 @@ $aplicacoes = mysqli_fetch_all(
                                                 </button>
                                             </div>
                                         </td>
-                                        <td class="text-end">
-                                            <button type="button" class="btn btn-sm btn-sistema btn-aplicar"
-                                                    data-vacinaid="<?= (int) $vacina['Vacinaid'] ?>"
-                                                    data-max="<?= (int) $vacina['QuantidadeLote'] ?>">
-                                                <i class="bi bi-check-lg"></i> Aplicar
-                                            </button>
-                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -435,7 +632,19 @@ $aplicacoes = mysqli_fetch_all(
                     <p class="small text-secondary mt-3 mb-0 d-none" id="semResultadoVacina">
                         Nenhuma vacina encontrada.
                     </p>
+
+                    <p class="small text-secondary mt-3 mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Escolha a vacina, defina a quantidade e feche esta janela.
+                        Depois clique em <strong>Aplicar</strong> na tela.
+                    </p>
                 <?php endif; ?>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary w-100" data-bs-dismiss="modal">
+                    <i class="bi bi-check2 me-1"></i> Concluir seleção
+                </button>
             </div>
         </div>
     </div>
@@ -455,6 +664,15 @@ $aplicacoes = mysqli_fetch_all(
             const texto = normalizar(item.dataset.busca || item.textContent);
             const mostrar = busca === '' || texto.includes(busca);
             item.classList.toggle('d-none', !mostrar);
+
+            if (!mostrar) {
+                const radio = item.querySelector('.vacina-radio');
+                if (radio) {
+                    radio.checked = false;
+                }
+                item.classList.remove('table-active');
+            }
+
             if (mostrar) {
                 visiveis++;
             }
@@ -463,6 +681,31 @@ $aplicacoes = mysqli_fetch_all(
         if (mensagemVazio) {
             mensagemVazio.classList.toggle('d-none', visiveis > 0);
         }
+    }
+
+    // ---------- Botão de pagamento ----------
+    const botaoPago = document.getElementById('botaoPago');
+    const pagoInput = document.getElementById('pago');
+
+    function atualizarBotaoPago() {
+        if (!botaoPago || !pagoInput) {
+            return;
+        }
+
+        const pago = pagoInput.value === '1';
+        botaoPago.textContent = pago ? 'PAGO' : 'NÃO PAGO';
+        botaoPago.classList.toggle('btn-success', pago);
+        botaoPago.classList.toggle('btn-danger', !pago);
+        botaoPago.setAttribute('aria-pressed', pago ? 'true' : 'false');
+    }
+
+    if (botaoPago && pagoInput) {
+        botaoPago.addEventListener('click', function () {
+            pagoInput.value = pagoInput.value === '1' ? '0' : '1';
+            atualizarBotaoPago();
+        });
+
+        atualizarBotaoPago();
     }
 
     // ---------- Modal de animais ----------
@@ -512,31 +755,41 @@ $aplicacoes = mysqli_fetch_all(
     const buscaVacina = document.getElementById('buscaVacina');
     const vacinas = Array.from(document.querySelectorAll('.vacina-opcao'));
     const semResultadoVacina = document.getElementById('semResultadoVacina');
-    const erroVacina = document.getElementById('erroVacina');
+    const erroAplicacao = document.getElementById('erroAplicacao');
     const form = document.getElementById('formAplicacao');
 
-    function mostrarErroVacina(mensagem) {
-        erroVacina.textContent = mensagem;
-        erroVacina.classList.remove('d-none');
+    function mostrarErroAplicacao(mensagem) {
+        erroAplicacao.textContent = mensagem;
+        erroAplicacao.classList.remove('d-none');
     }
 
-    function limparErroVacina() {
-        erroVacina.textContent = '';
-        erroVacina.classList.add('d-none');
+    function limparErroAplicacao() {
+        erroAplicacao.textContent = '';
+        erroAplicacao.classList.add('d-none');
+    }
+
+    function selecionarLinhaVacina(input) {
+        const linha = input.closest('tr');
+        const radio = linha.querySelector('.vacina-radio');
+
+        if (radio) {
+            radio.checked = true;
+        }
+
+        document.querySelectorAll('.vacina-opcao').forEach(function (item) {
+            item.classList.remove('table-active');
+        });
+        linha.classList.add('table-active');
     }
 
     if (modalVacina) {
         modalVacina.addEventListener('show.bs.modal', function () {
-            limparErroVacina();
+            limparErroAplicacao();
 
             if (buscaVacina) {
                 buscaVacina.value = '';
                 filtrar(vacinas, '', semResultadoVacina);
             }
-
-            document.querySelectorAll('.qtd-vacina').forEach(function (input) {
-                input.value = 0;
-            });
         });
     }
 
@@ -546,9 +799,21 @@ $aplicacoes = mysqli_fetch_all(
         });
     }
 
+    document.querySelectorAll('.vacina-radio').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            const linha = radio.closest('tr');
+
+            document.querySelectorAll('.vacina-opcao').forEach(function (item) {
+                item.classList.remove('table-active');
+            });
+            linha.classList.add('table-active');
+        });
+    });
+
     document.querySelectorAll('.qtd-vacina').forEach(function (input) {
         input.addEventListener('focus', function () {
             input.select();
+            selecionarLinhaVacina(input);
         });
 
         input.addEventListener('change', function () {
@@ -563,6 +828,7 @@ $aplicacoes = mysqli_fetch_all(
             }
 
             input.value = valor;
+            selecionarLinhaVacina(input);
         });
     });
 
@@ -583,50 +849,61 @@ $aplicacoes = mysqli_fetch_all(
             }
 
             input.value = valor;
+            selecionarLinhaVacina(input);
         });
     });
 
-    document.querySelectorAll('.btn-aplicar').forEach(function (botao) {
-        botao.addEventListener('click', function () {
-            limparErroVacina();
+    const botaoAplicarVacina = document.getElementById('botaoAplicarVacina');
 
+    if (botaoAplicarVacina) {
+        botaoAplicarVacina.addEventListener('click', function () {
+            limparErroAplicacao();
+
+            const selecionada = document.querySelector('.vacina-radio:checked');
             const animalid = document.getElementById('animalid').value;
             const data = document.getElementById('aplicacao').value;
             const retorno = document.getElementById('retorno').value;
-            const input = botao.closest('tr').querySelector('.qtd-vacina');
+
+            if (!selecionada) {
+                mostrarErroAplicacao('Selecione uma vacina na tabela.');
+                return;
+            }
+
+            const linha = selecionada.closest('tr');
+            const input = linha.querySelector('.qtd-vacina');
             const dose = parseInt(input.value, 10) || 0;
-            const max = parseInt(botao.dataset.max, 10) || 0;
+            const max = parseInt(input.max, 10) || 0;
 
             if (animalid === '') {
-                mostrarErroVacina('Selecione o animal antes de aplicar a vacina.');
+                mostrarErroAplicacao('Selecione o animal antes de aplicar a vacina.');
                 return;
             }
             if (data === '') {
-                mostrarErroVacina('Informe a data da aplicação.');
+                mostrarErroAplicacao('Informe a data da aplicação.');
                 return;
             }
             if (retorno !== '' && retorno < data) {
-                mostrarErroVacina('A data de retorno não pode ser anterior à aplicação.');
+                mostrarErroAplicacao('A data de retorno não pode ser anterior à aplicação.');
                 return;
             }
             if (dose < 1) {
-                mostrarErroVacina('Informe uma quantidade maior que zero.');
+                mostrarErroAplicacao('Informe uma quantidade maior que zero.');
                 return;
             }
             if (dose > max) {
-                mostrarErroVacina('A quantidade informada é maior que o disponível no lote.');
+                mostrarErroAplicacao('A quantidade informada é maior que o disponível no lote.');
                 return;
             }
 
-            document.getElementById('vacinaid').value = botao.dataset.vacinaid;
+            document.getElementById('vacinaid').value = selecionada.value;
             document.getElementById('dose').value = dose;
 
-            botao.disabled = true;
-            botao.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Aplicando...';
+            botaoAplicarVacina.disabled = true;
+            botaoAplicarVacina.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Aplicando...';
 
             form.submit();
         });
-    });
+    }
 })();
 </script>
 
