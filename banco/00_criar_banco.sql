@@ -38,3 +38,4 @@ CREATE TABLE IF NOT EXISTS vacinas_aplicacadas(
     Animalid int NOT NULL,
     FOREIGN KEY (Animalid) REFERENCES animais(Animalid)
 );
+

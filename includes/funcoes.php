@@ -59,3 +59,30 @@ function idade($data)
     }
     return $diff->d . ($diff->d === 1 ? ' dia' : ' dias');
 }
+
+// Retorna um ícone (emoji) que representa a espécie do animal
+function icone_especie($especie)
+{
+    $especie = mb_strtolower((string) $especie, 'UTF-8');
+
+    if (str_contains($especie, 'cachorro') || str_contains($especie, 'cão') || str_contains($especie, 'cao') || str_contains($especie, 'canin')) {
+        return '🐕';
+    }
+    if (str_contains($especie, 'gato') || str_contains($especie, 'felino')) {
+        return '🐈';
+    }
+    if (str_contains($especie, 'ave') || str_contains($especie, 'pássaro') || str_contains($especie, 'passaro')) {
+        return '🐦';
+    }
+    if (str_contains($especie, 'coelho') || str_contains($especie, 'lepor')) {
+        return '🐇';
+    }
+    if (str_contains($especie, 'roedor') || str_contains($especie, 'hamster') || str_contains($especie, 'rato') || str_contains($especie, 'camundongo')) {
+        return '🐹';
+    }
+    if (str_contains($especie, 'réptil') || str_contains($especie, 'reptil') || str_contains($especie, 'tartaruga') || str_contains($especie, 'lagarto') || str_contains($especie, 'cobra')) {
+        return '🦎';
+    }
+
+    return '🐾';
+}

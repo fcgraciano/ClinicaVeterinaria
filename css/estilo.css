@@ -43,3 +43,22 @@ body {
     background-color: #0b5c56;
     color: #fff;
 }
+
+/* Ícone redondo usado nas listas de animais */
+.icone-animal {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background-color: #e6f4f1;
+    font-size: 1.25rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* Controle de quantidade no modal de vacinas */
+.controle-quantidade {
+    width: 140px;
+}
