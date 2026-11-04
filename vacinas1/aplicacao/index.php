@@ -28,6 +28,10 @@ $animais = mysqli_fetch_all(
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acao = $_POST['acao'] ?? 'aplicar';
 
+    // Mantém a busca ativa após as ações de pagamento/aplicação
+    $buscaPost = $_POST['busca'] ?? '';
+    $buscaPost = is_string($buscaPost) ? mb_substr(trim($buscaPost), 0, 100) : '';
+
     // Alterna o pagamento de uma aplicação já registrada
     if ($acao === 'alternar_pagamento') {
         $aplicacaoid = (int) ($_POST['aplicacaoid'] ?? 0);
@@ -130,11 +134,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        $parametrosRetorno = $buscaPost !== '' ? ['busca' => $buscaPost] : [];
+
         if ($erroPagamento === '') {
-            header('Location: index.php?ok=pagamento');
+            $parametrosRetorno['ok'] = 'pagamento';
         } else {
-            header('Location: index.php?erro_pagamento=1');
+            $parametrosRetorno['erro_pagamento'] = 1;
         }
+
+        header('Location: index.php?' . http_build_query($parametrosRetorno));
         exit;
     }
 
@@ -262,7 +270,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     mysqli_commit($conexao);
 
-                    header('Location: index.php?ok=aplicacao');
+                    $parametrosRetorno = $buscaPost !== '' ? ['busca' => $buscaPost] : [];
+                    $parametrosRetorno['ok'] = 'aplicacao';
+
+                    header('Location: index.php?' . http_build_query($parametrosRetorno));
                     exit;
                 } catch (Exception $e) {
                     mysqli_rollback($conexao);
@@ -291,10 +302,19 @@ $vacinas = mysqli_fetch_all(
 );
 
 // Mantém o animal escolhido se o formulário voltar com erro
+// ou se o usuário clicar em "Aplicar" a partir de um resultado da busca
 $animalSelecionado = null;
-if (isset($_POST['animalid'])) {
+$animalPreSelecionado = 0;
+
+if (isset($_POST['animalid']) && is_scalar($_POST['animalid'])) {
+    $animalPreSelecionado = (int) $_POST['animalid'];
+} elseif (isset($_GET['animal']) && is_scalar($_GET['animal'])) {
+    $animalPreSelecionado = (int) $_GET['animal'];
+}
+
+if ($animalPreSelecionado > 0) {
     foreach ($animais as $animal) {
-        if ((int) $animal['Animalid'] === (int) $_POST['animalid']) {
+        if ((int) $animal['Animalid'] === $animalPreSelecionado) {
             $animalSelecionado = $animal;
             break;
         }
@@ -303,16 +323,82 @@ if (isset($_POST['animalid'])) {
 
 $pagoSelecionado = ($_POST['pago'] ?? '0') === '1';
 
-$aplicacoes = mysqli_fetch_all(
-    mysqli_query(
-        $conexao,
-        'SELECT ap.Aplicacaoid, ap.DataAplicacao, ap.Retorno, ap.dose, ap.TipoVacina, ap.Pago, an.Nome AS Animal
-           FROM vacinas_aplicacadas ap
-           LEFT JOIN animais an ON an.Animalid = ap.Animalid
-          ORDER BY ap.DataAplicacao DESC, ap.Aplicacaoid DESC'
-    ),
-    MYSQLI_ASSOC
-);
+// Busca por ID da aplicação ou nome do animal
+$buscaParam = $_GET['busca'] ?? $_POST['busca'] ?? '';
+$busca = is_string($buscaParam) ? trim($buscaParam) : '';
+$busca = mb_substr($busca, 0, 100);
+$buscaAtiva = $busca !== '';
+
+$sqlAplicacoes = 'SELECT ap.Aplicacaoid, ap.Animalid, ap.DataAplicacao, ap.Retorno, ap.dose,
+                         ap.TipoVacina, ap.Pago, an.Nome AS Animal
+                    FROM vacinas_aplicacadas ap
+                    LEFT JOIN animais an ON an.Animalid = ap.Animalid';
+
+$condicoesBusca = [];
+$parametrosBusca = [];
+$tiposBusca = '';
+$termoLike = '%' . addcslashes($busca, '%_\\') . '%';
+
+if ($buscaAtiva) {
+    $condicoesBusca[] = 'an.Nome LIKE ?';
+    $parametrosBusca[] = $termoLike;
+    $tiposBusca .= 's';
+
+    if (ctype_digit($busca)) {
+        $condicoesBusca[] = 'ap.Aplicacaoid = ?';
+        $parametrosBusca[] = (int) $busca;
+        $tiposBusca .= 'i';
+
+        $condicoesBusca[] = 'ap.Animalid = ?';
+        $parametrosBusca[] = (int) $busca;
+        $tiposBusca .= 'i';
+    }
+
+    $sqlAplicacoes .= ' WHERE (' . implode(' OR ', $condicoesBusca) . ')';
+}
+
+$sqlAplicacoes .= ' ORDER BY ap.DataAplicacao DESC, ap.Aplicacaoid DESC';
+
+if ($buscaAtiva) {
+    $stmt = mysqli_prepare($conexao, $sqlAplicacoes);
+    mysqli_stmt_bind_param($stmt, $tiposBusca, ...$parametrosBusca);
+    mysqli_stmt_execute($stmt);
+    $resultado = mysqli_stmt_get_result($stmt);
+    $aplicacoes = $resultado ? mysqli_fetch_all($resultado, MYSQLI_ASSOC) : [];
+} else {
+    $aplicacoes = mysqli_fetch_all(mysqli_query($conexao, $sqlAplicacoes), MYSQLI_ASSOC);
+}
+
+// Animais que atendem à busca mas ainda não possuem aplicações registradas.
+// Assim o animal recém-cadastrado também aparece na pesquisa.
+$animaisSemAplicacao = [];
+
+if ($buscaAtiva) {
+    $sqlAnimais = 'SELECT an.Animalid, an.Nome
+                     FROM animais an
+                     LEFT JOIN vacinas_aplicacadas ap ON ap.Animalid = an.Animalid
+                    WHERE ap.Aplicacaoid IS NULL
+                      AND (an.Nome LIKE ?';
+
+    $parametrosAnimais = [$termoLike];
+    $tiposAnimais = 's';
+
+    if (ctype_digit($busca)) {
+        $sqlAnimais .= ' OR an.Animalid = ?';
+        $parametrosAnimais[] = (int) $busca;
+        $tiposAnimais .= 'i';
+    }
+
+    $sqlAnimais .= ') ORDER BY an.Nome';
+
+    $stmt = mysqli_prepare($conexao, $sqlAnimais);
+    mysqli_stmt_bind_param($stmt, $tiposAnimais, ...$parametrosAnimais);
+    mysqli_stmt_execute($stmt);
+    $resultado = mysqli_stmt_get_result($stmt);
+    $animaisSemAplicacao = $resultado ? mysqli_fetch_all($resultado, MYSQLI_ASSOC) : [];
+}
+
+$totalResultados = count($aplicacoes) + count($animaisSemAplicacao);
 ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
@@ -359,6 +445,7 @@ $aplicacoes = mysqli_fetch_all(
 
                 <form method="post" action="index.php" id="formAplicacao" class="row g-3" novalidate>
                     <input type="hidden" name="acao" value="aplicar">
+                    <input type="hidden" name="busca" value="<?= h($busca) ?>">
                     <input type="hidden" name="animalid" id="animalid"
                            value="<?= $animalSelecionado ? (int) $animalSelecionado['Animalid'] : '' ?>">
                     <input type="hidden" name="vacinaid" id="vacinaid" value="">
@@ -443,10 +530,36 @@ $aplicacoes = mysqli_fetch_all(
                     <i class="bi bi-list-ul me-1"></i> Aplicações registradas
                 </h2>
 
+                <form method="get" action="index.php" class="mb-3" role="search">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="search" class="form-control" id="busca" name="busca"
+                               placeholder="Pesquisar por ID ou nome do animal..." autocomplete="off"
+                               aria-label="Pesquisar por ID da aplicação, ID do animal ou nome do animal"
+                               value="<?= h($busca) ?>">
+                        <?php if ($buscaAtiva): ?>
+                            <a href="index.php" class="btn btn-outline-secondary" title="Limpar busca">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
+                        <?php endif; ?>
+                        <button type="submit" class="btn btn-sistema">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+                    <?php if ($buscaAtiva): ?>
+                        <p class="small text-secondary mt-2 mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <?= $totalResultados ?> resultado(s) para
+                            <strong><?= h($busca) ?></strong>.
+                        </p>
+                    <?php endif; ?>
+                </form>
+
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
                             <tr>
+                                <th>ID</th>
                                 <th>Animal</th>
                                 <th>Vacina</th>
                                 <th class="text-end">Dose</th>
@@ -456,16 +569,25 @@ $aplicacoes = mysqli_fetch_all(
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (count($aplicacoes) === 0): ?>
+                            <?php if (count($aplicacoes) === 0 && count($animaisSemAplicacao) === 0): ?>
                                 <tr>
-                                    <td colspan="6" class="text-center text-secondary py-3">
-                                        Nenhuma aplicação registrada.
+                                    <td colspan="7" class="text-center text-secondary py-3">
+                                        <?= $buscaAtiva
+                                            ? 'Nenhum animal ou aplicação encontrado para a busca informada.'
+                                            : 'Nenhuma aplicação registrada.' ?>
                                     </td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($aplicacoes as $item): ?>
                                     <tr>
-                                        <td><?= h($item['Animal'] ?? '—') ?></td>
+                                        <td class="text-secondary">#<?= (int) $item['Aplicacaoid'] ?></td>
+                                        <td>
+                                            <?= h($item['Animal'] ?? '—') ?>
+                                            <?php if (!empty($item['Animalid'])): ?>
+                                                <span class="badge text-bg-light text-secondary ms-1"
+                                                      title="ID do animal">#<?= (int) $item['Animalid'] ?></span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><?= h($item['TipoVacina']) ?></td>
                                         <td class="text-end"><?= (int) $item['dose'] ?></td>
                                         <td><?= data_br($item['DataAplicacao']) ?></td>
@@ -473,12 +595,33 @@ $aplicacoes = mysqli_fetch_all(
                                         <td>
                                             <form method="post" action="index.php" class="d-inline">
                                                 <input type="hidden" name="acao" value="alternar_pagamento">
+                                                <input type="hidden" name="busca" value="<?= h($busca) ?>">
                                                 <input type="hidden" name="aplicacaoid" value="<?= (int) $item['Aplicacaoid'] ?>">
                                                 <button type="submit"
                                                         class="btn btn-sm <?= (int) $item['Pago'] === 1 ? 'btn-success' : 'btn-danger' ?>">
                                                     <?= (int) $item['Pago'] === 1 ? 'PAGO' : 'NÃO PAGO' ?>
                                                 </button>
                                             </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+
+                                <?php foreach ($animaisSemAplicacao as $animal): ?>
+                                    <tr class="table-info">
+                                        <td class="text-secondary">—</td>
+                                        <td>
+                                            <strong><?= h($animal['Nome']) ?></strong>
+                                            <span class="badge text-bg-secondary ms-1"
+                                                  title="ID do animal">#<?= (int) $animal['Animalid'] ?></span>
+                                        </td>
+                                        <td colspan="4" class="text-secondary">
+                                            Nenhuma aplicação registrada para este animal.
+                                        </td>
+                                        <td>
+                                            <a href="index.php?animal=<?= (int) $animal['Animalid'] ?>#formAplicacao"
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-syringe"></i> Aplicar
+                                            </a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -507,8 +650,8 @@ $aplicacoes = mysqli_fetch_all(
                 <div class="input-group mb-3">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
                     <input type="search" class="form-control" id="buscaAnimal"
-                           placeholder="Pesquisar por nome, espécie ou raça..." autocomplete="off"
-                           aria-label="Pesquisar animal">
+                           placeholder="Pesquisar por ID, nome, espécie ou raça..." autocomplete="off"
+                           aria-label="Pesquisar animal por ID, nome, espécie ou raça">
                 </div>
 
                 <?php if (count($animais) === 0): ?>
@@ -521,7 +664,7 @@ $aplicacoes = mysqli_fetch_all(
                         <?php foreach ($animais as $animal): ?>
                             <?php
                             $buscaAnimal = mb_strtolower(
-                                $animal['Nome'] . ' ' . $animal['Especie'] . ' ' . $animal['Raca'] . ' ' . $animal['Cor'],
+                                $animal['Animalid'] . ' ' . $animal['Nome'] . ' ' . $animal['Especie'] . ' ' . $animal['Raca'] . ' ' . $animal['Cor'],
                                 'UTF-8'
                             );
                             ?>
@@ -533,7 +676,10 @@ $aplicacoes = mysqli_fetch_all(
                                 <span class="icone-animal" aria-hidden="true"><?= icone_especie($animal['Especie']) ?></span>
                                 <span class="visually-hidden">Espécie: <?= h($animal['Especie']) ?></span>
                                 <span class="flex-grow-1 text-start">
-                                    <strong class="d-block"><?= h($animal['Nome']) ?></strong>
+                                    <strong class="d-block">
+                                        <?= h($animal['Nome']) ?>
+                                        <span class="badge text-bg-light text-secondary">#<?= (int) $animal['Animalid'] ?></span>
+                                    </strong>
                                     <span class="small text-secondary">
                                         <?= h($animal['Raca']) ?> · <?= idade($animal['DataNascimento']) ?>
                                     </span>
