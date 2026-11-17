@@ -1,7 +1,26 @@
-<?php include '../includes/cabecalho.php'; ?>
+<?php
+require_once "proteger.php";
+?>
+<?php
+require_once "../proteger_financeiro.php";
+?>
 
-<h1>Financeiro</h1>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Patas & Cia</title>
+</head>
 
-<div class="alert alert-info">Módulo em construção.</div>
+<body>
 
-<?php include '../includes/rodape.php'; ?>
+    <h1>Bem-vindo ao Patas & Cia!</h1>
+
+    <p>
+        Olá, <?= htmlspecialchars($_SESSION['usuario_nome']) ?>!
+    </p>
+
+    <a href="logout.php">Sair da conta</a>
+
+</body>
+</html>
