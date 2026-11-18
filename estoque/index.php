@@ -1,7 +1,7 @@
-<?php include '../includes/cabecalho.php'; ?>
+<?php include __DIR__ . '/../includes/cabecalho.php'; ?>
 
 <h1>Estoque</h1>
 
-<div class="alert alert-info">Módulo em construção.</div>
+<a class="btn btn-primary" href="adicionar-produto.php">Adicionar produto</a>
 
-<?php include '../includes/rodape.php'; ?>
+<?php include __DIR__ . '/../includes/rodape.php'; ?>
