@@ -8,6 +8,8 @@ $_SESSION['saida_estoque_token'] ??= bin2hex(random_bytes(32));
 
 $loteId = '';
 $quantidade = '';
+$unidade = 'unidade';
+$unidades = ['unidade' => 'Unidade', 'ml' => 'mL', 'dose' => 'Dose'];
 $lotes = [];
 $erros = [];
 $erroBanco = '';
@@ -23,6 +25,8 @@ if ($enviado) {
     $token = $_POST['token'] ?? '';
     $loteId = is_string($_POST['lote_id'] ?? null) ? $_POST['lote_id'] : '';
     $quantidade = is_string($_POST['quantidade'] ?? null) ? trim($_POST['quantidade']) : '';
+    $unidadeEnviada = $_POST['unidade'] ?? 'unidade';
+    $unidade = is_string($unidadeEnviada) ? $unidadeEnviada : '';
 
     if (!is_string($token) || !hash_equals($_SESSION['saida_estoque_token'], $token)) {
         $erros['token'] = 'O formulário expirou ou já foi enviado. Revise os dados e tente novamente.';
@@ -30,8 +34,15 @@ if ($enviado) {
     if (!preg_match('/\A[1-9][0-9]{0,9}\z/', $loteId) || $loteId > 4294967295) {
         $erros['lote'] = 'Selecione um lote válido.';
     }
-    if (!preg_match('/\A[1-9][0-9]{0,9}\z/', $quantidade) || $quantidade > 4294967295) {
-        $erros['quantidade'] = 'Informe uma quantidade inteira entre 1 e 4294967295.';
+    if (!isset($unidades[$unidade])) {
+        $erros['unidade'] = 'Selecione uma unidade de medida válida.';
+    }
+    $quantidade = str_replace(',', '.', $quantidade);
+    $formatoQuantidade = $unidade === 'unidade' ? '/\A[1-9][0-9]{0,9}\z/' : '/\A[0-9]{1,10}(?:\.[0-9]{1,3})?\z/';
+    if (!preg_match($formatoQuantidade, $quantidade) || $quantidade <= 0 || $quantidade > 4294967295) {
+        $erros['quantidade'] = $unidade === 'unidade'
+            ? 'Informe uma quantidade inteira entre 1 e 4294967295.'
+            : 'Informe uma quantidade positiva até 4294967295, com até três casas decimais.';
     }
     foreach ($camposResponsavel as $campo => [$rotulo, $limite]) {
         $valor = $_POST[$campo] ?? '';
@@ -52,7 +63,8 @@ try {
         try {
             // Usa o mesmo bloqueio por lote das demais movimentacoes de estoque.
             $consulta = mysqli_prepare($conexao, '
-                SELECT l.data_validade, l.status, l.numero_lote, p.classificacao
+                SELECT l.data_validade, l.status, l.numero_lote, p.classificacao,
+                       p.fracionamento_habilitado, p.fator_ml, p.fator_dose
                 FROM lotes l
                 JOIN produtos p ON p.id = l.produto_id
                 WHERE l.id = ?
@@ -60,7 +72,10 @@ try {
             ');
             mysqli_stmt_bind_param($consulta, 's', $loteId);
             mysqli_stmt_execute($consulta);
-            mysqli_stmt_bind_result($consulta, $dataValidade, $statusLote, $numeroLote, $classificacao);
+            mysqli_stmt_bind_result(
+                $consulta, $dataValidade, $statusLote, $numeroLote, $classificacao,
+                $fracionamentoHabilitado, $fatorMl, $fatorDose
+            );
             $existe = mysqli_stmt_fetch($consulta);
             mysqli_stmt_close($consulta);
 
@@ -84,25 +99,38 @@ try {
             }
 
             if (!$erros) {
+                $fator = ['unidade' => '1', 'ml' => $fatorMl, 'dose' => $fatorDose][$unidade];
+                if ($unidade !== 'unidade' && !$fracionamentoHabilitado) {
+                    $erros['unidade'] = 'O fracionamento não está habilitado para este produto.';
+                } elseif ($fator === null || $fator <= 0 || $fator > 1) {
+                    $erros['unidade'] = 'Configure um fator de conversão válido para esta medida.';
+                }
+            }
+
+            if (!$erros) {
                 $consulta = mysqli_prepare($conexao, "
-                    SELECT saldo, saldo - CAST(? AS SIGNED)
+                    SELECT saldo, baixa, saldo - baixa
                     FROM (
                         SELECT COALESCE(SUM(CASE tipo
-                            WHEN 'entrada' THEN CAST(quantidade AS SIGNED)
-                            WHEN 'saida' THEN -CAST(quantidade AS SIGNED)
+                            WHEN 'entrada' THEN quantidade
+                            WHEN 'saida' THEN -CAST(quantidade AS DECIMAL(24,9))
                         END), 0) AS saldo
                         FROM movimentacoes
                         WHERE lote_id = ?
                     ) AS saldo_lote
+                    CROSS JOIN (
+                        SELECT CAST(? AS DECIMAL(13,3)) * CAST(? AS DECIMAL(7,6)) AS baixa
+                    ) AS conversao
                 ");
-                mysqli_stmt_bind_param($consulta, 'ss', $quantidade, $loteId);
+                mysqli_stmt_bind_param($consulta, 'sss', $loteId, $quantidade, $fator);
                 mysqli_stmt_execute($consulta);
-                mysqli_stmt_bind_result($consulta, $saldoAtual, $saldoRestante);
+                mysqli_stmt_bind_result($consulta, $saldoAtual, $quantidadeBaixa, $saldoRestante);
                 mysqli_stmt_fetch($consulta);
                 mysqli_stmt_close($consulta);
 
                 if ($saldoRestante < 0) {
-                    $erros['quantidade'] = 'Saldo insuficiente. Saldo disponível no lote: ' . $saldoAtual . '.';
+                    $erros['quantidade'] = 'Saldo insuficiente. Saldo disponível no lote: '
+                        . formatarQuantidadeEstoque((string) $saldoAtual) . '.';
                 }
             }
 
@@ -115,7 +143,7 @@ try {
                     INSERT INTO movimentacoes (lote_id, tipo, quantidade, responsavel_tecnico, registro_responsavel)
                     VALUES (?, 'saida', ?, ?, ?)
                 ");
-                mysqli_stmt_bind_param($consulta, 'ssss', $loteId, $quantidade, $responsavel, $registro);
+                mysqli_stmt_bind_param($consulta, 'ssss', $loteId, $quantidadeBaixa, $responsavel, $registro);
                 mysqli_stmt_execute($consulta);
                 mysqli_stmt_close($consulta);
                 mysqli_commit($conexao);
@@ -145,7 +173,7 @@ include __DIR__ . '/../includes/cabecalho.php';
 
 <?php if ($saldo !== null): ?>
     <div class="alert alert-success" role="status">
-        Saída registrada. Saldo do lote: <?= htmlspecialchars((string) $saldo) ?>.
+        Saída registrada. Saldo do lote: <?= htmlspecialchars(formatarQuantidadeEstoque((string) $saldo)) ?> unidade(s).
     </div>
 <?php endif; ?>
 <?php if ($erroBanco !== ''): ?>
@@ -171,7 +199,8 @@ include __DIR__ . '/../includes/cabecalho.php';
                         ? 'Sem validade'
                         : 'Validade ' . (new DateTimeImmutable($lote['data_validade']))->format('d/m/Y');
                     $rotuloLote = $lote['produto'] . ' — Lote ' . $lote['numero_lote'] . ' — '
-                        . $lote['fornecedor'] . ' — ' . $validade . ' — Saldo ' . $lote['saldo'];
+                        . $lote['fornecedor'] . ' — ' . $validade . ' — Saldo '
+                        . formatarQuantidadeEstoque((string) $lote['saldo']);
                     if ($lote['classificacao'] !== 'comum') {
                         $rotuloLote .= ' — Exige responsável técnico';
                     }
@@ -186,9 +215,21 @@ include __DIR__ . '/../includes/cabecalho.php';
             <?php endif; ?>
         </div>
         <div class="mb-3">
+            <label class="form-label" for="unidade">Unidade de medida</label>
+            <select class="form-select<?= isset($erros['unidade']) ? ' is-invalid' : '' ?>" id="unidade" name="unidade"
+                <?php if (isset($erros['unidade'])): ?>aria-invalid="true" aria-describedby="unidade-erro"<?php endif; ?>>
+                <?php foreach ($unidades as $valor => $rotulo): ?>
+                    <option value="<?= $valor ?>" <?= $unidade === $valor ? 'selected' : '' ?>><?= $rotulo ?></option>
+                <?php endforeach; ?>
+            </select>
+            <?php if (isset($erros['unidade'])): ?>
+                <div class="invalid-feedback" id="unidade-erro"><?= $erros['unidade'] ?></div>
+            <?php endif; ?>
+        </div>
+        <div class="mb-3">
             <label class="form-label" for="quantidade">Quantidade</label>
             <input class="form-control<?= isset($erros['quantidade']) ? ' is-invalid' : '' ?>" type="number"
-                id="quantidade" name="quantidade" min="1" max="4294967295" step="1" required
+                id="quantidade" name="quantidade" min="0.001" max="4294967295" step="0.001" required
                 value="<?= htmlspecialchars($quantidade, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
                 <?php if (isset($erros['quantidade'])): ?>aria-invalid="true" aria-describedby="quantidade-erro"<?php endif; ?>>
             <?php if (isset($erros['quantidade'])): ?>
@@ -217,7 +258,7 @@ include __DIR__ . '/../includes/cabecalho.php';
         </div>
     </form>
 <?php else: ?>
-    <?php foreach (array_merge(['lote', 'quantidade'], array_keys($camposResponsavel)) as $campo): ?>
+    <?php foreach (array_merge(['lote', 'unidade', 'quantidade'], array_keys($camposResponsavel)) as $campo): ?>
         <?php if (isset($erros[$campo])): ?>
             <div class="alert alert-danger" role="alert"><?= htmlspecialchars($erros[$campo]) ?></div>
         <?php endif; ?>

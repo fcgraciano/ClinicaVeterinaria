@@ -113,3 +113,36 @@ SET @ddl_responsavel_movimentacoes = IF(
 PREPARE atualizar_responsavel_movimentacoes FROM @ddl_responsavel_movimentacoes;
 EXECUTE atualizar_responsavel_movimentacoes;
 DEALLOCATE PREPARE atualizar_responsavel_movimentacoes;
+
+-- Fatores em unidades de estoque por 1 mL ou 1 dose.
+-- Exemplo: uma unidade com 10 mL usa fator_ml = 0.100000.
+SET @ddl_fracionamento = IF(
+    EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'produtos' AND COLUMN_NAME = 'fracionamento_habilitado'
+    ),
+    'DO 0',
+    'ALTER TABLE produtos
+        ADD COLUMN fracionamento_habilitado BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN fator_ml DECIMAL(7,6) NULL,
+        ADD COLUMN fator_dose DECIMAL(7,6) NULL,
+        ADD CONSTRAINT chk_produtos_fator_ml CHECK (fator_ml > 0 AND fator_ml <= 1),
+        ADD CONSTRAINT chk_produtos_fator_dose CHECK (fator_dose > 0 AND fator_dose <= 1)'
+);
+PREPARE atualizar_fracionamento FROM @ddl_fracionamento;
+EXECUTE atualizar_fracionamento;
+DEALLOCATE PREPARE atualizar_fracionamento;
+
+SET @ddl_quantidade_decimal = IF(
+    EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'movimentacoes'
+            AND COLUMN_NAME = 'quantidade' AND DATA_TYPE = 'decimal'
+            AND NUMERIC_PRECISION = 24 AND NUMERIC_SCALE = 9
+    ),
+    'DO 0',
+    'ALTER TABLE movimentacoes MODIFY COLUMN quantidade DECIMAL(24,9) UNSIGNED NOT NULL'
+);
+PREPARE atualizar_quantidade_decimal FROM @ddl_quantidade_decimal;
+EXECUTE atualizar_quantidade_decimal;
+DEALLOCATE PREPARE atualizar_quantidade_decimal;
