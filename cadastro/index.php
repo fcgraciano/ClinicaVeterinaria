@@ -1,7 +1,4 @@
-
-<?php
-include '../includes/cabecalho.php';
-?>
+<?php include '../includes/cabecalho.php'; ?>
 
 <style>
     .cadastro-container {
@@ -27,7 +24,6 @@ include '../includes/cabecalho.php';
     .cadastro-banner p {
         font-size: 17px;
         margin-bottom: 0;
-        opacity: 0.95;
     }
 
     .cadastro-subtitulo {
@@ -113,6 +109,12 @@ include '../includes/cabecalho.php';
         color: #35645e;
     }
 
+    .cadastro-divisor {
+        margin-top: 15px;
+        margin-bottom: 30px;
+        border-top: 1px solid #dedede;
+    }
+
     @media (max-width: 768px) {
         .cadastro-banner {
             padding: 25px;
@@ -132,27 +134,32 @@ include '../includes/cabecalho.php';
 
     <!-- Banner -->
     <div class="cadastro-banner">
+
         <h1>Cadastro</h1>
 
         <p>
             Bem-vindo ao módulo de cadastro da Patas & Cia.
-            Escolha abaixo o que deseja cadastrar.
+            Escolha abaixo o que deseja fazer.
         </p>
+
     </div>
 
-    <!-- Título -->
+    <!-- Seção de cadastro -->
     <div class="mb-4">
-        <h2 class="cadastro-subtitulo">O que deseja cadastrar?</h2>
+
+        <h2 class="cadastro-subtitulo">
+            Novos cadastros
+        </h2>
 
         <p class="cadastro-descricao">
-            Selecione uma das opções para continuar.
+            Cadastre novos tutores e animais na clínica.
         </p>
+
     </div>
 
-    <!-- Cards -->
     <div class="row">
 
-        <!-- Card Tutor -->
+        <!-- Cadastrar Tutor -->
         <div class="col-md-6 mb-4">
 
             <div class="cadastro-card">
@@ -161,23 +168,23 @@ include '../includes/cabecalho.php';
                     👤
                 </div>
 
-                <h3>Cadastro de Tutores</h3>
+                <h3>Cadastrar Tutor</h3>
 
                 <p>
                     Registre os responsáveis pelos animais,
-                    incluindo nome, documentos, telefone,
-                    endereço e outras informações importantes.
+                    incluindo nome, CPF, telefone, endereço
+                    e outras informações importantes.
                 </p>
 
                 <a href="cadastro_tutor.php" class="cadastro-botao">
-                    Cadastrar Tutor <span>→</span>
+                    Novo Tutor <span>→</span>
                 </a>
 
             </div>
 
         </div>
 
-        <!-- Card Animal -->
+        <!-- Cadastrar Animal -->
         <div class="col-md-6 mb-4">
 
             <div class="cadastro-card">
@@ -186,16 +193,16 @@ include '../includes/cabecalho.php';
                     🐾
                 </div>
 
-                <h3>Cadastro de Animais</h3>
+                <h3>Cadastrar Animal</h3>
 
                 <p>
                     Registre os animais atendidos pela clínica,
-                    com informações como nome, espécie, raça,
-                    idade, sexo e tutor responsável.
+                    com nome, espécie, raça, idade, sexo
+                    e tutor responsável.
                 </p>
 
                 <a href="cadastro_animal.php" class="cadastro-botao">
-                    Cadastrar Animal <span>→</span>
+                    Novo Animal <span>→</span>
                 </a>
 
             </div>
@@ -204,11 +211,81 @@ include '../includes/cabecalho.php';
 
     </div>
 
-    <!-- Aviso informativo -->
+    <hr class="cadastro-divisor">
+
+    <!-- Seção de gerenciamento -->
+    <div class="mb-4">
+
+        <h2 class="cadastro-subtitulo">
+            Gerenciar cadastros
+        </h2>
+
+        <p class="cadastro-descricao">
+            Consulte os registros existentes e gerencie suas informações.
+        </p>
+
+    </div>
+
+    <div class="row">
+
+        <!-- Gerenciar Tutores -->
+        <div class="col-md-6 mb-4">
+
+            <div class="cadastro-card">
+
+                <div class="cadastro-icone">
+                    📋
+                </div>
+
+                <h3>Tutores Cadastrados</h3>
+
+                <p>
+                    Visualize os tutores cadastrados, consulte seus dados,
+                    edite informações ou exclua registros.
+                </p>
+
+                <a href="tutores.php" class="cadastro-botao">
+                    Ver Tutores <span>→</span>
+                </a>
+
+            </div>
+
+        </div>
+
+        <!-- Gerenciar Animais -->
+        <div class="col-md-6 mb-4">
+
+            <div class="cadastro-card">
+
+                <div class="cadastro-icone">
+                    🐶
+                </div>
+
+                <h3>Animais Cadastrados</h3>
+
+                <p>
+                    Visualize os animais cadastrados, confira seus dados,
+                    edite informações ou exclua registros.
+                </p>
+
+                <a href="animais.php" class="cadastro-botao">
+                    Ver Animais <span>→</span>
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Informação -->
     <div class="cadastro-info">
+
         <strong>Informação:</strong>
+
         Para cadastrar um animal, é importante que o tutor
         responsável já esteja cadastrado no sistema.
+
     </div>
 
 </div>
