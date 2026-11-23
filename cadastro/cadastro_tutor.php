@@ -1,7 +1,4 @@
-
-<?php
-include '../includes/cabecalho.php';
-?>
+<?php include '../includes/cabecalho.php'; ?>
 
 <style>
     .tutor-container {
@@ -95,6 +92,11 @@ include '../includes/cabecalho.php';
 
     .tutor-obrigatorio {
         color: #dc3545;
+    }
+
+    #cep-status {
+        font-size: 13px;
+        margin-top: 5px;
     }
 
     @media (max-width: 768px) {
@@ -200,7 +202,10 @@ include '../includes/cabecalho.php';
                            class="form-control"
                            id="cep"
                            name="cep"
-                           placeholder="00000-000">
+                           placeholder="00000-000"
+                           maxlength="9">
+
+                    <div id="cep-status"></div>
                 </div>
 
                 <div class="col-md-7 mb-3">
@@ -329,5 +334,78 @@ include '../includes/cabecalho.php';
     </form>
 
 </div>
+
+<!-- Busca automática de CEP -->
+<script>
+    const campoCEP = document.getElementById('cep');
+    const statusCEP = document.getElementById('cep-status');
+
+    // Coloca o hífen automaticamente no CEP
+    campoCEP.addEventListener('input', function () {
+
+        let cep = this.value.replace(/\D/g, '');
+
+        if (cep.length > 8) {
+            cep = cep.substring(0, 8);
+        }
+
+        if (cep.length > 5) {
+            cep = cep.replace(/^(\d{5})(\d{1,3})$/, '$1-$2');
+        }
+
+        this.value = cep;
+    });
+
+    // Consulta o endereço quando sair do campo CEP
+    campoCEP.addEventListener('blur', function () {
+
+        let cep = this.value.replace(/\D/g, '');
+
+        // Se não tiver 8 números, não faz a consulta
+        if (cep.length !== 8) {
+            statusCEP.textContent = '';
+            return;
+        }
+
+        statusCEP.style.color = '#11796f';
+        statusCEP.textContent = 'Consultando CEP...';
+
+        fetch('https://viacep.com.br/ws/' + cep + '/json/')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erro na consulta');
+                }
+
+                return response.json();
+            })
+            .then(dados => {
+
+                // CEP não encontrado
+                if (dados.erro) {
+                    statusCEP.style.color = '#dc3545';
+                    statusCEP.textContent = 'CEP não encontrado. Confira o número.';
+                    return;
+                }
+
+                // Preenche os campos do endereço
+                document.getElementById('logradouro').value = dados.logradouro || '';
+                document.getElementById('bairro').value = dados.bairro || '';
+                document.getElementById('cidade').value = dados.localidade || '';
+                document.getElementById('estado').value = dados.uf || '';
+
+                statusCEP.style.color = '#198754';
+                statusCEP.textContent = 'Endereço preenchido automaticamente!';
+
+            })
+            .catch(erro => {
+
+                statusCEP.style.color = '#dc3545';
+                statusCEP.textContent = 'Não foi possível consultar o CEP. Preencha o endereço manualmente.';
+
+                console.log(erro);
+            });
+
+    });
+</script>
 
 <?php include '../includes/rodape.php'; ?>
