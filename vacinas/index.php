@@ -40,7 +40,21 @@ $pendentes = $conexao->query("
     WHERE status = 'pendente'
 ");
 
-$erroBanco = (!$resumo || !$lista || !$pendentes) ? $conexao->error : '';
+// Faturamento agrupado por categoria de vacina (TipoVacina).
+// Este módulo não registra pagamentos: o valor é estimado pelo preço
+// unitário da vacina aplicada (vacinas.Valor).
+$faturamentoCategoria = $conexao->query("
+    SELECT
+        v.TipoVacina AS categoria,
+        COUNT(*) AS aplicacoes,
+        COALESCE(SUM(v.Valor), 0) AS total
+    FROM vacinas_aplicadas va
+    JOIN vacinas v ON v.Vacinaid = va.vacina_id
+    GROUP BY v.TipoVacina
+    ORDER BY total DESC, categoria ASC
+");
+
+$erroBanco = (!$resumo || !$lista || !$pendentes || !$faturamentoCategoria) ? $conexao->error : '';
 
 $dados = $resumo
     ? $resumo->fetch_assoc()
@@ -199,6 +213,56 @@ include '../includes/cabecalho.php';
         <?php endif; ?>
         </tbody>
     </table>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header bg-white">
+        <span class="fw-semibold">
+            <i class="bi bi-bar-chart me-1"></i> Faturamento por categoria de vacina
+        </span>
+    </div>
+
+    <div class="card-body">
+        <?php if ($faturamentoCategoria->num_rows === 0): ?>
+            <p class="text-secondary mb-0">Nenhuma aplicação de vacina registrada.</p>
+        <?php else: ?>
+            <?php
+            $totalAplicacoes = 0;
+            $totalFaturado = 0.0;
+            ?>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Categoria</th>
+                            <th class="text-end">Aplicações</th>
+                            <th class="text-end">Faturamento estimado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php while ($categoria = $faturamentoCategoria->fetch_assoc()): ?>
+                        <?php
+                        $totalAplicacoes += (int) $categoria['aplicacoes'];
+                        $totalFaturado += (float) $categoria['total'];
+                        ?>
+                        <tr>
+                            <td><?= htmlspecialchars($categoria['categoria']) ?></td>
+                            <td class="text-end"><?= (int) $categoria['aplicacoes'] ?></td>
+                            <td class="text-end">R$ <?= number_format((float) $categoria['total'], 2, ',', '.') ?></td>
+                        </tr>
+                    <?php endwhile; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th>Total</th>
+                            <th class="text-end"><?= $totalAplicacoes ?></th>
+                            <th class="text-end">R$ <?= number_format($totalFaturado, 2, ',', '.') ?></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <?php endif; ?>
