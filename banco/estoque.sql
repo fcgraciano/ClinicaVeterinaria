@@ -55,3 +55,16 @@ CREATE TABLE IF NOT EXISTS movimentacoes (
     CONSTRAINT chk_movimentacoes_quantidade CHECK (quantidade > 0),
     CONSTRAINT fk_movimentacoes_lote FOREIGN KEY (lote_id) REFERENCES lotes (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Acrescenta o status tambem em bancos que ja possuem lotes.
+SET @ddl_status_lotes = IF(
+    EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lotes' AND COLUMN_NAME = 'status'
+    ),
+    'DO 0',
+    'ALTER TABLE lotes ADD COLUMN status ENUM(''ativo'', ''bloqueado'', ''vencido'') NOT NULL DEFAULT ''ativo'''
+);
+PREPARE atualizar_status_lotes FROM @ddl_status_lotes;
+EXECUTE atualizar_status_lotes;
+DEALLOCATE PREPARE atualizar_status_lotes;

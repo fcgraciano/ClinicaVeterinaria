@@ -36,15 +36,21 @@ try {
         mysqli_begin_transaction($conexao);
         try {
             // Usa o mesmo bloqueio por lote das demais movimentacoes de estoque.
-            $consulta = mysqli_prepare($conexao, 'SELECT id FROM lotes WHERE id = ? FOR UPDATE');
+            $consulta = mysqli_prepare($conexao, 'SELECT data_validade, status FROM lotes WHERE id = ? FOR UPDATE');
             mysqli_stmt_bind_param($consulta, 's', $loteId);
             mysqli_stmt_execute($consulta);
-            mysqli_stmt_bind_result($consulta, $loteEncontrado);
+            mysqli_stmt_bind_result($consulta, $dataValidade, $statusLote);
             $existe = mysqli_stmt_fetch($consulta);
             mysqli_stmt_close($consulta);
 
+            $hoje = (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d');
+
             if (!$existe) {
                 $erros['lote'] = 'O lote selecionado não existe.';
+            } elseif ($statusLote === 'bloqueado') {
+                $erros['lote'] = 'O lote selecionado está bloqueado para saída.';
+            } elseif ($statusLote === 'vencido' || ($dataValidade !== null && $dataValidade < $hoje)) {
+                $erros['lote'] = 'O lote selecionado está vencido e não pode ter saída registrada.';
             } else {
                 $consulta = mysqli_prepare($conexao, "
                     SELECT saldo, saldo - CAST(? AS SIGNED)
