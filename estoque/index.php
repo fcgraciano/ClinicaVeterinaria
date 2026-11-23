@@ -10,5 +10,6 @@
 <a class="btn btn-primary" href="registrar-perda-ou-descarte.php">Registrar perda ou descarte</a>
 <a class="btn btn-primary" href="historico-movimentacoes.php">Consultar histórico</a>
 <a class="btn btn-primary" href="relatorio-vencimentos.php">Consultar vencimentos de lotes</a>
+<a class="btn btn-primary" href="lotes-do-produto.php">Consultar lotes de um produto</a>
 
 <?php include '../includes/rodape.php'; ?>
