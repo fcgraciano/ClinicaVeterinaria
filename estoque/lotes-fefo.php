@@ -1,12 +1,17 @@
 <?php
+function formatarQuantidadeEstoque(string $quantidade): string
+{
+    return strpos($quantidade, '.') === false ? $quantidade : rtrim(rtrim($quantidade, '0'), '.');
+}
+
 function consultarLotesFefo(mysqli $conexao, string $hoje): array
 {
     $consulta = mysqli_prepare($conexao, "
         SELECT l.id, p.nome AS produto, p.classificacao, l.numero_lote, f.nome AS fornecedor,
                l.data_validade,
                SUM(CASE m.tipo
-                   WHEN 'entrada' THEN CAST(m.quantidade AS SIGNED)
-                   WHEN 'saida' THEN -CAST(m.quantidade AS SIGNED)
+                   WHEN 'entrada' THEN m.quantidade
+                   WHEN 'saida' THEN -CAST(m.quantidade AS DECIMAL(24,9))
                END) AS saldo
         FROM lotes l
         JOIN produtos p ON p.id = l.produto_id
