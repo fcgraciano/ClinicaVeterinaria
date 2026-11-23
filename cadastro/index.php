@@ -1,6 +1,9 @@
 
-<?php include '../includes/cabecalho.php'; ?>
-
+<?php
+require_once __DIR__ . '/../includes/autenticacao.php';
+exigir_role(array('recepcao'));
+include '../includes/cabecalho.php';
+?>
 <style>
     .cadastro-container {
         padding-top: 25px;
