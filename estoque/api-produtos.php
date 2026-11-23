@@ -21,7 +21,7 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 try {
     require __DIR__ . '/../includes/conexao.php';
     $consulta = mysqli_prepare($conexao, "
-        SELECT p.nome, p.codigo_barras, c.nome AS categoria,
+        SELECT p.id, p.nome, p.codigo_barras, c.nome AS categoria,
                COALESCE(SUM(CASE m.tipo
                    WHEN 'entrada' THEN CAST(m.quantidade AS DECIMAL(24,9))
                    WHEN 'saida' THEN -CAST(m.quantidade AS DECIMAL(24,9))

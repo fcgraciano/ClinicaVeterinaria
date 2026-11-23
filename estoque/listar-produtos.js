@@ -46,6 +46,11 @@ async function carregarProdutos() {
             saldo.className = 'text-end';
             const valor = String(produto.saldo);
             saldo.textContent = valor.includes('.') ? valor.replace(/0+$/, '').replace(/\.$/, '').replace('.', ',') : valor;
+            const editar = document.createElement('a');
+            editar.href = 'editar-produto.php?id=' + encodeURIComponent(produto.id);
+            editar.textContent = 'Editar';
+            editar.setAttribute('aria-label', 'Editar ' + produto.nome);
+            linha.insertCell().append(editar);
             linhas.append(linha);
         }
         corpoTabela.append(linhas);

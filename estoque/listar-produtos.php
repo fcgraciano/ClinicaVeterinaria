@@ -23,6 +23,7 @@
                 <th scope="col">Código de barras</th>
                 <th scope="col">Categoria</th>
                 <th scope="col" class="text-end">Saldo</th>
+                <th scope="col">Ações</th>
             </tr>
         </thead>
         <tbody></tbody>
