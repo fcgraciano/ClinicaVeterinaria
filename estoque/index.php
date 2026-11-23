@@ -4,5 +4,6 @@
 
 <a class="btn btn-primary" href="cadastrar-categoria.php">Cadastrar categoria</a>
 <a class="btn btn-primary" href="cadastrar-fornecedor.php">Cadastrar fornecedor</a>
+<a class="btn btn-primary" href="registrar-entrada-de-lote.php">Registrar entrada de lote</a>
 
 <?php include '../includes/rodape.php'; ?>
