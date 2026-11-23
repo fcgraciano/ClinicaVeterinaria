@@ -9,5 +9,6 @@
 <a class="btn btn-primary" href="alerta-estoque-minimo.php">Consultar itens para reposição</a>
 <a class="btn btn-primary" href="registrar-perda-ou-descarte.php">Registrar perda ou descarte</a>
 <a class="btn btn-primary" href="historico-movimentacoes.php">Consultar histórico</a>
+<a class="btn btn-primary" href="relatorio-vencimentos.php">Consultar vencimentos de lotes</a>
 
 <?php include '../includes/rodape.php'; ?>
