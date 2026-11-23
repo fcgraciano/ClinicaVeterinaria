@@ -85,3 +85,31 @@ SET @ddl_status_lotes = IF(
 PREPARE atualizar_status_lotes FROM @ddl_status_lotes;
 EXECUTE atualizar_status_lotes;
 DEALLOCATE PREPARE atualizar_status_lotes;
+
+-- Classifique vacinas e medicamentos controlados ja cadastrados antes de registrar saidas.
+SET @ddl_classificacao_produtos = IF(
+    EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'produtos' AND COLUMN_NAME = 'classificacao'
+    ),
+    'DO 0',
+    'ALTER TABLE produtos ADD COLUMN classificacao
+        ENUM(''comum'', ''vacina'', ''controle_especial'') NOT NULL DEFAULT ''comum'''
+);
+PREPARE atualizar_classificacao_produtos FROM @ddl_classificacao_produtos;
+EXECUTE atualizar_classificacao_produtos;
+DEALLOCATE PREPARE atualizar_classificacao_produtos;
+
+SET @ddl_responsavel_movimentacoes = IF(
+    EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'movimentacoes' AND COLUMN_NAME = 'responsavel_tecnico'
+    ),
+    'DO 0',
+    'ALTER TABLE movimentacoes
+        ADD COLUMN responsavel_tecnico VARCHAR(150) NULL,
+        ADD COLUMN registro_responsavel VARCHAR(30) NULL'
+);
+PREPARE atualizar_responsavel_movimentacoes FROM @ddl_responsavel_movimentacoes;
+EXECUTE atualizar_responsavel_movimentacoes;
+DEALLOCATE PREPARE atualizar_responsavel_movimentacoes;
