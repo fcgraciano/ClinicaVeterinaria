@@ -1,25 +1,13 @@
 <?php
+require_once __DIR__ . '/consulta-estoque-minimo.php';
+
 $produtos = [];
 $erroConsulta = false;
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 try {
     require __DIR__ . '/../includes/conexao.php';
-    $resultado = mysqli_query($conexao, "
-        SELECT p.nome, p.codigo_barras, p.estoque_minimo,
-               COALESCE(SUM(CASE m.tipo
-                   WHEN 'entrada' THEN CAST(m.quantidade AS DECIMAL(24,9))
-                   WHEN 'saida' THEN -CAST(m.quantidade AS DECIMAL(24,9))
-               END), 0) AS saldo_total
-        FROM produtos p
-        LEFT JOIN lotes l ON l.produto_id = p.id
-        LEFT JOIN movimentacoes m ON m.lote_id = l.id
-        GROUP BY p.id, p.nome, p.codigo_barras, p.estoque_minimo
-        HAVING saldo_total <= p.estoque_minimo
-        ORDER BY p.nome, p.id
-    ");
-    $produtos = mysqli_fetch_all($resultado, MYSQLI_ASSOC);
-    mysqli_free_result($resultado);
+    $produtos = consultarEstoqueMinimo($conexao);
 } catch (mysqli_sql_exception $excecao) {
     error_log($excecao->getMessage());
     $erroConsulta = true;
@@ -47,16 +35,10 @@ include __DIR__ . '/../includes/cabecalho.php';
             </thead>
             <tbody>
                 <?php foreach ($produtos as $produto): ?>
-                    <?php
-                    $saldo = (string) $produto['saldo_total'];
-                    if (strpos($saldo, '.') !== false) {
-                        $saldo = rtrim(rtrim($saldo, '0'), '.');
-                    }
-                    ?>
                     <tr>
                         <th scope="row"><?= htmlspecialchars($produto['nome']) ?></th>
                         <td><?= htmlspecialchars($produto['codigo_barras']) ?></td>
-                        <td class="text-end"><?= htmlspecialchars(str_replace('.', ',', $saldo)) ?></td>
+                        <td class="text-end"><?= htmlspecialchars(formatarSaldoParaReposicao((string) $produto['saldo_total'])) ?></td>
                         <td class="text-end"><?= htmlspecialchars((string) $produto['estoque_minimo']) ?></td>
                     </tr>
                 <?php endforeach; ?>

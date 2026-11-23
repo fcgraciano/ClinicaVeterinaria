@@ -2,6 +2,6 @@
 
 <h1>Estoque</h1>
 
-<a class="btn btn-primary" href="alerta-estoque-minimo.php">Consultar itens para reposição</a>
+<?php include __DIR__ . '/painel-alerta-estoque-minimo.php'; ?>
 
 <?php include '../includes/rodape.php'; ?>
