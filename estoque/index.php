@@ -6,5 +6,6 @@
 <a class="btn btn-primary" href="cadastrar-fornecedor.php">Cadastrar fornecedor</a>
 <a class="btn btn-primary" href="registrar-entrada-de-lote.php">Registrar entrada de lote</a>
 <a class="btn btn-primary" href="registrar-saida-de-estoque.php">Registrar saída de estoque</a>
+<a class="btn btn-primary" href="alerta-estoque-minimo.php">Consultar itens para reposição</a>
 
 <?php include '../includes/rodape.php'; ?>
