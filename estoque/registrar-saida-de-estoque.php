@@ -1,5 +1,6 @@
 <?php
 session_start();
+require __DIR__ . '/lotes-fefo.php';
 
 $saldo = $_SESSION['saida_estoque_saldo'] ?? null;
 unset($_SESSION['saida_estoque_saldo']);
@@ -11,6 +12,7 @@ $lotes = [];
 $erros = [];
 $erroBanco = '';
 $enviado = $_SERVER['REQUEST_METHOD'] === 'POST';
+$fusoEstoque = new DateTimeZone('America/Sao_Paulo');
 
 if ($enviado) {
     $token = $_POST['token'] ?? '';
@@ -43,7 +45,7 @@ try {
             $existe = mysqli_stmt_fetch($consulta);
             mysqli_stmt_close($consulta);
 
-            $hoje = (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d');
+            $hoje = (new DateTimeImmutable('now', $fusoEstoque))->format('Y-m-d');
 
             if (!$existe) {
                 $erros['lote'] = 'O lote selecionado não existe.';
@@ -96,15 +98,8 @@ try {
         }
     }
 
-    $consulta = mysqli_query($conexao, '
-        SELECT l.id, p.nome AS produto, l.numero_lote, f.nome AS fornecedor
-        FROM lotes l
-        JOIN produtos p ON p.id = l.produto_id
-        JOIN fornecedores f ON f.id = l.fornecedor_id
-        ORDER BY p.nome, l.numero_lote, f.nome, l.id
-    ');
-    $lotes = mysqli_fetch_all($consulta, MYSQLI_ASSOC);
-    mysqli_free_result($consulta);
+    $hoje = (new DateTimeImmutable('now', $fusoEstoque))->format('Y-m-d');
+    $lotes = consultarLotesFefo($conexao, $hoje);
 } catch (mysqli_sql_exception $excecao) {
     error_log($excecao->getMessage());
     $erroBanco = 'Não foi possível acessar o estoque ou registrar a saída. Tente novamente.';
@@ -123,7 +118,7 @@ include __DIR__ . '/../includes/cabecalho.php';
 <?php if ($erroBanco !== ''): ?>
     <div class="alert alert-danger" role="alert"><?= $erroBanco ?></div>
 <?php elseif (!$lotes): ?>
-    <div class="alert alert-info" role="status">Cadastre um lote para registrar uma saída.</div>
+    <div class="alert alert-info" role="status">Nenhum lote disponível para saída.</div>
 <?php endif; ?>
 <?php if (isset($erros['token'])): ?>
     <div class="alert alert-danger" role="alert"><?= $erros['token'] ?></div>
@@ -133,13 +128,20 @@ include __DIR__ . '/../includes/cabecalho.php';
     <form method="post" action="registrar-saida-de-estoque.php" class="card card-body col-lg-6">
         <input type="hidden" name="token" value="<?= htmlspecialchars($_SESSION['saida_estoque_token']) ?>">
         <div class="mb-3">
-            <label class="form-label" for="lote_id">Lote</label>
+            <label class="form-label" for="lote_id">Lote por ordem de validade (FEFO)</label>
             <select class="form-select<?= isset($erros['lote']) ? ' is-invalid' : '' ?>" id="lote_id" name="lote_id" required
                 <?php if (isset($erros['lote'])): ?>aria-invalid="true" aria-describedby="lote-erro"<?php endif; ?>>
                 <option value="">Selecione</option>
                 <?php foreach ($lotes as $lote): ?>
+                    <?php
+                    $validade = $lote['data_validade'] === null
+                        ? 'Sem validade'
+                        : 'Validade ' . (new DateTimeImmutable($lote['data_validade']))->format('d/m/Y');
+                    $rotuloLote = $lote['produto'] . ' — Lote ' . $lote['numero_lote'] . ' — '
+                        . $lote['fornecedor'] . ' — ' . $validade . ' — Saldo ' . $lote['saldo'];
+                    ?>
                     <option value="<?= htmlspecialchars((string) $lote['id']) ?>" <?= $loteId === (string) $lote['id'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($lote['produto'] . ' — Lote ' . $lote['numero_lote'] . ' — ' . $lote['fornecedor']) ?>
+                        <?= htmlspecialchars($rotuloLote) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
@@ -163,6 +165,11 @@ include __DIR__ . '/../includes/cabecalho.php';
         </div>
     </form>
 <?php else: ?>
+    <?php foreach (['lote', 'quantidade'] as $campo): ?>
+        <?php if (isset($erros[$campo])): ?>
+            <div class="alert alert-danger" role="alert"><?= htmlspecialchars($erros[$campo]) ?></div>
+        <?php endif; ?>
+    <?php endforeach; ?>
     <a class="btn btn-outline-secondary" href="index.php">Voltar ao estoque</a>
 <?php endif; ?>
 
