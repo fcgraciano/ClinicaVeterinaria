@@ -146,3 +146,26 @@ SET @ddl_quantidade_decimal = IF(
 PREPARE atualizar_quantidade_decimal FROM @ddl_quantidade_decimal;
 EXECUTE atualizar_quantidade_decimal;
 DEALLOCATE PREPARE atualizar_quantidade_decimal;
+
+-- Perdas e descartes continuam sendo saidas para o calculo do saldo.
+SET @ddl_perdas = IF(
+    EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'movimentacoes' AND COLUMN_NAME = 'motivo_saida'
+    ),
+    'DO 0',
+    'ALTER TABLE movimentacoes
+        ADD COLUMN motivo_saida ENUM(''perda'', ''descarte'') NULL,
+        ADD COLUMN justificativa VARCHAR(1000) NULL,
+        ADD COLUMN responsavel_movimentacao VARCHAR(150) NULL,
+        ADD CONSTRAINT chk_movimentacoes_perdas CHECK (
+            motivo_saida IS NULL OR (
+                tipo = ''saida'' AND motivo_saida IN (''perda'', ''descarte'')
+                AND justificativa IS NOT NULL AND CHAR_LENGTH(TRIM(justificativa)) >= 15
+                AND responsavel_movimentacao IS NOT NULL AND CHAR_LENGTH(TRIM(responsavel_movimentacao)) > 0
+            )
+        )'
+);
+PREPARE atualizar_perdas FROM @ddl_perdas;
+EXECUTE atualizar_perdas;
+DEALLOCATE PREPARE atualizar_perdas;
