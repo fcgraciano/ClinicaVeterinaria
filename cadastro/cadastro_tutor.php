@@ -1,5 +1,7 @@
 
-<?php include '../includes/cabecalho.php'; ?>
+<?php
+include '../includes/cabecalho.php';
+?>
 
 <style>
     .tutor-container {
