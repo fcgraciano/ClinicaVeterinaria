@@ -1,4 +1,4 @@
-<?php include '../includes/cabecalho.php'; ?>
+<?php require_once __DIR__ . '/../includes/autenticacao.php'; exigir_role(array('financeiro')); include '../includes/cabecalho.php'; ?>
 
 <h1>Financeiro</h1>
 

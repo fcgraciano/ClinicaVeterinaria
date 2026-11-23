@@ -1,4 +1,8 @@
-<?php include '../includes/cabecalho.php'; ?>
+<?php
+require_once __DIR__ . '/../includes/autenticacao.php';
+exigir_login();
+include '../includes/cabecalho.php';
+?>
 
 <div class="boas-vindas">
     <h1>Bem-vindo à Patas & Cia</h1>

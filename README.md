@@ -18,8 +18,15 @@ git pull
 1. Coloque a pasta em `C:\xampp\htdocs\ClinicaVeterinaria`
 2. Ligue o **Apache** e o **MySQL** no XAMPP
 3. No phpMyAdmin, rode `banco/00_criar_banco.sql`
-Não esqueça das atualizações de bancos posteriores
-4. Abra `http://localhost/ClinicaVeterinaria`
+4. Rode também `banco/01_autenticacao.sql` no phpMyAdmin para criar as tabelas de usuários e grupos.
+5. Abra `http://localhost/ClinicaVeterinaria/Usuarios/PrimeiroAcesso.php` e crie o primeiro administrador. A página bloqueia novos cadastros depois que a primeira conta existe.
+6. Entre em `http://localhost/ClinicaVeterinaria` com o e-mail e senha escolhidos.
+
+## Login e permissões
+
+O sistema usa PHP procedural, sessões e `mysqli` (sem PDO e sem orientação a objetos). As senhas são armazenadas com `password_hash`. A tabela `usuario_grupos` permite associar vários grupos a cada usuário. As roles disponíveis são `admin`, `recepcao`, `veterinario`, `financeiro` e `estoque`; o administrador tem acesso a todos os módulos.
+
+Páginas novas de módulo devem chamar `exigir_role(array('role'))` antes de qualquer HTML, depois de incluir `includes/autenticacao.php`. Para exigir apenas uma sessão autenticada use `exigir_login()`.
 
 ## Pastas
 

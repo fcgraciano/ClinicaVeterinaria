@@ -33,6 +33,11 @@
                     <a class="nav-link" href="../inicio/index.php">Início</a>
                 </li>
 
+                <?php if (isset($_SESSION['usuario_nome'])): ?>
+                <li class="nav-item"><span class="nav-link">Olá, <?php echo htmlspecialchars($_SESSION['usuario_nome'], ENT_QUOTES, 'UTF-8'); ?></span></li>
+                <li class="nav-item"><a class="nav-link" href="../Usuarios/Sair.php">Sair</a></li>
+                <?php endif; ?>
+
               
 
             </ul>
