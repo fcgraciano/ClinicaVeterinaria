@@ -2,6 +2,6 @@
 
 <h1>Estoque</h1>
 
-<div class="alert alert-info">Módulo em construção.</div>
+<a class="btn btn-primary" href="registrar-entrada-de-lote.php">Registrar entrada de lote</a>
 
 <?php include '../includes/rodape.php'; ?>
