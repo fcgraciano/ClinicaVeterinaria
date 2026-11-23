@@ -95,7 +95,7 @@ include __DIR__ . '/../includes/cabecalho.php';
                             $saldo = rtrim(rtrim($saldo, '0'), '.');
                         }
                         ?>
-                        <tr>
+                        <tr id="lote-<?= htmlspecialchars((string) $lote['id']) ?>">
                             <th scope="row"><?= htmlspecialchars($lote['numero_lote']) ?></th>
                             <td><?= htmlspecialchars($lote['fornecedor']) ?></td>
                             <td><?= htmlspecialchars($statusLote[$lote['status']] ?? $lote['status']) ?></td>

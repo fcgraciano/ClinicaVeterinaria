@@ -13,4 +13,6 @@
 <a class="btn btn-primary" href="lotes-do-produto.php">Consultar lotes de um produto</a>
 <?php include __DIR__ . '/painel-alerta-estoque-minimo.php'; ?>
 
+<?php include __DIR__ . '/painel-alerta-vencimento.php'; ?>
+
 <?php include '../includes/rodape.php'; ?>
