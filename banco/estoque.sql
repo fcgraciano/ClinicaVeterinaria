@@ -14,6 +14,23 @@ CREATE TABLE IF NOT EXISTS fornecedores (
     PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Atualiza tambem instalacoes antigas. CNPJ nulo preserva fornecedores legados.
+SET @ddl_fornecedores = IF(
+    EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fornecedores' AND COLUMN_NAME = 'cnpj'
+    ),
+    'DO 0',
+    'ALTER TABLE fornecedores
+        ADD COLUMN cnpj CHAR(14) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+        ADD COLUMN telefone VARCHAR(30) NULL,
+        ADD COLUMN email VARCHAR(254) NULL,
+        ADD UNIQUE KEY uq_fornecedores_cnpj (cnpj)'
+);
+PREPARE atualizar_fornecedores FROM @ddl_fornecedores;
+EXECUTE atualizar_fornecedores;
+DEALLOCATE PREPARE atualizar_fornecedores;
+
 CREATE TABLE IF NOT EXISTS produtos (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
     nome VARCHAR(150) NOT NULL,
