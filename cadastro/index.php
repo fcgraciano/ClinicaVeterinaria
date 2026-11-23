@@ -1,4 +1,4 @@
-<?php require_once __DIR__ . '/../includes/autenticacao.php'; exigir_role(array('recepcao')); include '../includes/cabecalho.php'; ?>
+<?php  include '../includes/cabecalho.php'; ?>
 
 
 <style>
@@ -16,8 +16,6 @@
         box-shadow: 0 4px 12px rgba(17, 121, 111, 0.12);
     }
 
-
->>>>>>> origin/Vacinas
 
     .cadastro-banner h1 {
         font-size: 32px;
