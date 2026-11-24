@@ -1,6 +1,126 @@
-<?php include '../includes/cabecalho.php'; ?>
+<?php
+
+require_once __DIR__ . '/../includes/conexao.php';
+
+$mensagem = "";
+$tipo = "";
+
+// Salvar tutor no banco de dados
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+    $nome = trim($_POST["nome"] ?? "");
+    $cpf = preg_replace('/\D/', '', $_POST["cpf"] ?? "");
+    $telefone = trim($_POST["telefone"] ?? "");
+    $email = trim($_POST["email"] ?? "");
+    $cep = trim($_POST["cep"] ?? "");
+    $logradouro = trim($_POST["logradouro"] ?? "");
+    $numero = trim($_POST["numero"] ?? "");
+    $bairro = trim($_POST["bairro"] ?? "");
+    $cidade = trim($_POST["cidade"] ?? "");
+    $estado = trim($_POST["estado"] ?? "");
+    $complemento = trim($_POST["complemento"] ?? "");
+    $observacoes = trim($_POST["observacoes"] ?? "");
+
+    // Verificar campos obrigatórios
+    if ($nome == "" || strlen($cpf) != 11 || $telefone == "") {
+
+        $mensagem = "Preencha os campos obrigatórios e informe um CPF com 11 números.";
+        $tipo = "danger";
+
+    } elseif ($email != "" && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+
+        $mensagem = "Informe um e-mail válido.";
+        $tipo = "danger";
+
+    } else {
+
+        // Inserir os dados na tabela tutores
+        $sql = "INSERT INTO tutores (
+                    nome,
+                    cpf,
+                    telefone,
+                    email,
+                    cep,
+                    logradouro,
+                    numero,
+                    bairro,
+                    cidade,
+                    estado,
+                    complemento,
+                    observacoes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try {
+
+            $stmt = mysqli_prepare($conexao, $sql);
+
+            if (!$stmt) {
+                throw new RuntimeException("Erro ao preparar o cadastro.");
+            }
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "ssssssssssss",
+                $nome,
+                $cpf,
+                $telefone,
+                $email,
+                $cep,
+                $logradouro,
+                $numero,
+                $bairro,
+                $cidade,
+                $estado,
+                $complemento,
+                $observacoes
+            );
+
+            if (mysqli_stmt_execute($stmt)) {
+
+                $mensagem = "Tutor cadastrado com sucesso!";
+                $tipo = "success";
+
+            } else {
+
+                if (mysqli_stmt_errno($stmt) == 1062) {
+
+                    $mensagem = "Este CPF já está cadastrado!";
+
+                } else {
+
+                    $mensagem = "Erro ao cadastrar o tutor.";
+
+                }
+
+                $tipo = "danger";
+            }
+
+            mysqli_stmt_close($stmt);
+
+        } catch (Exception $erro) {
+
+            if ($erro->getCode() == 1062) {
+
+                $mensagem = "Este CPF já está cadastrado!";
+
+            } else {
+
+                $mensagem = "Não foi possível cadastrar o tutor.";
+                error_log($erro->getMessage());
+
+            }
+
+            $tipo = "danger";
+        }
+    }
+}
+
+include '../includes/cabecalho.php';
+
+?>
 
 <style>
+
     .tutor-container {
         padding-top: 25px;
         padding-bottom: 40px;
@@ -94,12 +214,20 @@
         color: #dc3545;
     }
 
+    .tutor-mensagem {
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 25px;
+        font-weight: 500;
+    }
+
     #cep-status {
         font-size: 13px;
         margin-top: 5px;
     }
 
     @media (max-width: 768px) {
+
         .tutor-banner {
             padding: 25px;
         }
@@ -112,19 +240,34 @@
             padding: 20px;
         }
     }
+
 </style>
 
 <div class="container tutor-container">
 
     <!-- Banner -->
     <div class="tutor-banner">
+
         <h1>Cadastro de Tutor</h1>
 
         <p>
             Preencha os dados abaixo para cadastrar um novo
             responsável pelos animais na clínica.
         </p>
+
     </div>
+
+    <!-- Mensagem de sucesso ou erro -->
+    <?php if ($mensagem != ""): ?>
+
+        <div class="alert alert-<?php echo $tipo; ?> tutor-mensagem"
+             role="alert">
+
+            <?php echo htmlspecialchars($mensagem); ?>
+
+        </div>
+
+    <?php endif; ?>
 
     <form method="POST" action="">
 
@@ -136,52 +279,67 @@
             <div class="row">
 
                 <div class="col-md-8 mb-3">
+
                     <label for="nome">
-                        Nome completo <span class="tutor-obrigatorio">*</span>
+                        Nome completo
+                        <span class="tutor-obrigatorio">*</span>
                     </label>
 
                     <input type="text"
                            class="form-control"
                            id="nome"
                            name="nome"
+                           maxlength="150"
                            placeholder="Digite o nome completo"
                            required>
+
                 </div>
 
                 <div class="col-md-4 mb-3">
+
                     <label for="cpf">
-                        CPF <span class="tutor-obrigatorio">*</span>
+                        CPF
+                        <span class="tutor-obrigatorio">*</span>
                     </label>
 
                     <input type="text"
                            class="form-control"
                            id="cpf"
                            name="cpf"
+                           maxlength="14"
                            placeholder="000.000.000-00"
                            required>
+
                 </div>
 
                 <div class="col-md-6 mb-3">
+
                     <label for="telefone">
-                        Telefone <span class="tutor-obrigatorio">*</span>
+                        Telefone
+                        <span class="tutor-obrigatorio">*</span>
                     </label>
 
                     <input type="tel"
                            class="form-control"
                            id="telefone"
                            name="telefone"
+                           maxlength="15"
                            placeholder="(00) 00000-0000"
                            required>
+
                 </div>
 
                 <div class="col-md-6 mb-3">
+
                     <label for="email">E-mail</label>
 
                     <input type="email"
                            class="form-control"
                            id="email"
                            name="email"
+                           maxlength="150"
                            placeholder="exemplo@email.com">
+
                 </div>
 
             </div>
@@ -196,6 +354,7 @@
             <div class="row">
 
                 <div class="col-md-3 mb-3">
+
                     <label for="cep">CEP</label>
 
                     <input type="text"
@@ -206,49 +365,63 @@
                            maxlength="9">
 
                     <div id="cep-status"></div>
+
                 </div>
 
                 <div class="col-md-7 mb-3">
+
                     <label for="logradouro">Rua / Avenida</label>
 
                     <input type="text"
                            class="form-control"
                            id="logradouro"
                            name="logradouro"
+                           maxlength="150"
                            placeholder="Nome da rua ou avenida">
+
                 </div>
 
                 <div class="col-md-2 mb-3">
+
                     <label for="numero">Número</label>
 
                     <input type="text"
                            class="form-control"
                            id="numero"
                            name="numero"
+                           maxlength="20"
                            placeholder="Nº">
+
                 </div>
 
                 <div class="col-md-4 mb-3">
+
                     <label for="bairro">Bairro</label>
 
                     <input type="text"
                            class="form-control"
                            id="bairro"
                            name="bairro"
+                           maxlength="100"
                            placeholder="Bairro">
+
                 </div>
 
                 <div class="col-md-5 mb-3">
+
                     <label for="cidade">Cidade</label>
 
                     <input type="text"
                            class="form-control"
                            id="cidade"
                            name="cidade"
+                           maxlength="100"
                            placeholder="Cidade">
+
                 </div>
 
                 <div class="col-md-3 mb-3">
+
                     <label for="estado">Estado</label>
 
                     <select class="form-select"
@@ -285,16 +458,20 @@
                         <option value="TO">Tocantins</option>
 
                     </select>
+
                 </div>
 
                 <div class="col-md-6 mb-3">
+
                     <label for="complemento">Complemento</label>
 
                     <input type="text"
                            class="form-control"
                            id="complemento"
                            name="complemento"
+                           maxlength="150"
                            placeholder="Apartamento, casa, etc.">
+
                 </div>
 
             </div>
@@ -307,13 +484,17 @@
             <h4>Observações</h4>
 
             <div class="mb-3">
-                <label for="observacoes">Informações adicionais</label>
+
+                <label for="observacoes">
+                    Informações adicionais
+                </label>
 
                 <textarea class="form-control"
                           id="observacoes"
                           name="observacoes"
                           rows="3"
                           placeholder="Digite alguma observação, se necessário"></textarea>
+
             </div>
 
         </div>
@@ -321,7 +502,7 @@
         <!-- Botões -->
         <div class="d-flex justify-content-between flex-wrap gap-2">
 
-            <a href="cadastro.php" class="tutor-botao-voltar">
+            <a href="index.php" class="tutor-botao-voltar">
                 ← Voltar
             </a>
 
@@ -335,77 +516,163 @@
 
 </div>
 
-<!-- Busca automática de CEP -->
 <script>
+
+    // Campos do formulário
     const campoCEP = document.getElementById('cep');
     const statusCEP = document.getElementById('cep-status');
+    const campoCPF = document.getElementById('cpf');
+    const campoTelefone = document.getElementById('telefone');
 
-    // Coloca o hífen automaticamente no CEP
+    // Máscara automática do CPF
+    campoCPF.addEventListener('input', function () {
+
+        let cpf = this.value.replace(/\D/g, '');
+
+        cpf = cpf.substring(0, 11);
+
+        cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+        cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+        cpf = cpf.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+
+        this.value = cpf;
+
+    });
+
+    // Máscara automática do telefone
+    campoTelefone.addEventListener('input', function () {
+
+        let telefone = this.value.replace(/\D/g, '');
+
+        telefone = telefone.substring(0, 11);
+
+        if (telefone.length > 10) {
+
+            telefone = telefone.replace(
+                /^(\d{2})(\d{5})(\d{4})$/,
+                '($1) $2-$3'
+            );
+
+        } else {
+
+            telefone = telefone.replace(
+                /^(\d{2})(\d{4})(\d{0,4})$/,
+                '($1) $2-$3'
+            );
+
+        }
+
+        this.value = telefone;
+
+    });
+
+    // Máscara automática do CEP
     campoCEP.addEventListener('input', function () {
 
         let cep = this.value.replace(/\D/g, '');
 
         if (cep.length > 8) {
+
             cep = cep.substring(0, 8);
+
         }
 
         if (cep.length > 5) {
-            cep = cep.replace(/^(\d{5})(\d{1,3})$/, '$1-$2');
+
+            cep = cep.replace(
+                /^(\d{5})(\d{1,3})$/,
+                '$1-$2'
+            );
+
         }
 
         this.value = cep;
+
     });
 
-    // Consulta o endereço quando sair do campo CEP
+    // Consultar endereço pelo CEP
     campoCEP.addEventListener('blur', function () {
 
         let cep = this.value.replace(/\D/g, '');
 
-        // Se não tiver 8 números, não faz a consulta
+        // Verificar quantidade de números
         if (cep.length !== 8) {
+
             statusCEP.textContent = '';
+
             return;
+
         }
 
         statusCEP.style.color = '#11796f';
         statusCEP.textContent = 'Consultando CEP...';
 
         fetch('https://viacep.com.br/ws/' + cep + '/json/')
+
             .then(response => {
+
                 if (!response.ok) {
+
                     throw new Error('Erro na consulta');
+
                 }
 
                 return response.json();
+
             })
+
             .then(dados => {
 
-                // CEP não encontrado
-                if (dados.erro) {
-                    statusCEP.style.color = '#dc3545';
-                    statusCEP.textContent = 'CEP não encontrado. Confira o número.';
+                // Evita preencher com uma consulta antiga
+                if (campoCEP.value.replace(/\D/g, '') !== cep) {
                     return;
                 }
 
-                // Preenche os campos do endereço
-                document.getElementById('logradouro').value = dados.logradouro || '';
-                document.getElementById('bairro').value = dados.bairro || '';
-                document.getElementById('cidade').value = dados.localidade || '';
-                document.getElementById('estado').value = dados.uf || '';
+                // Verificar se o CEP existe
+                if (dados.erro) {
+
+                    statusCEP.style.color = '#dc3545';
+
+                    statusCEP.textContent =
+                        'CEP não encontrado. Confira o número.';
+
+                    return;
+
+                }
+
+                // Preencher automaticamente o endereço
+                document.getElementById('logradouro').value =
+                    dados.logradouro || '';
+
+                document.getElementById('bairro').value =
+                    dados.bairro || '';
+
+                document.getElementById('cidade').value =
+                    dados.localidade || '';
+
+                document.getElementById('estado').value =
+                    dados.uf || '';
 
                 statusCEP.style.color = '#198754';
-                statusCEP.textContent = 'Endereço preenchido automaticamente!';
+
+                statusCEP.textContent =
+                    'Endereço preenchido automaticamente!';
 
             })
+
             .catch(erro => {
 
                 statusCEP.style.color = '#dc3545';
-                statusCEP.textContent = 'Não foi possível consultar o CEP. Preencha o endereço manualmente.';
+
+                statusCEP.textContent =
+                    'Não foi possível consultar o CEP. Preencha o endereço manualmente.';
 
                 console.log(erro);
+
             });
 
     });
+
 </script>
 
 <?php include '../includes/rodape.php'; ?>
