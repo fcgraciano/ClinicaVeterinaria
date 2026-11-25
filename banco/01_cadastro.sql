@@ -21,3 +21,29 @@ CREATE TABLE IF NOT EXISTS tutores (
     observacoes TEXT,
     data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+USE patas_db;
+
+CREATE TABLE IF NOT EXISTS animais (
+
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tutor_id INT NOT NULL,
+    nome VARCHAR(100) NOT NULL,
+    especie VARCHAR(50) NOT NULL,
+    raca VARCHAR(100),
+    sexo VARCHAR(20) NOT NULL,
+    data_nascimento DATE,
+    peso DECIMAL(6,2),
+    cor VARCHAR(100),
+    castrado VARCHAR(20),
+    observacoes TEXT,
+    ativo TINYINT(1) NOT NULL DEFAULT 1,
+    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_animais_tutores
+        FOREIGN KEY (tutor_id)
+        REFERENCES tutores(id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+
+);
