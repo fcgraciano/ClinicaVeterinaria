@@ -179,7 +179,11 @@ include __DIR__ . '/../includes/cabecalho.php';
             <input class="form-control" id="responsavel" name="responsavel" maxlength="150"
                 value="<?= htmlspecialchars($valores['responsavel']) ?>" required>
         </div>
-        <button class="btn btn-primary align-self-start" type="submit">Registrar movimentação</button>
+        <p class="form-text">Ao confirmar, a quantidade será baixada do saldo do lote e registrada no histórico com motivo, justificativa e responsável.</p>
+        <button class="btn btn-primary align-self-start" type="submit"
+            onclick="return confirm('Confirma o registro de ' + document.getElementById('motivo').selectedOptions[0].text.toLowerCase() + '? A quantidade será baixada do saldo do lote.');">
+            Confirmar e registrar movimentação
+        </button>
     </form>
 <?php endif; ?>
 
