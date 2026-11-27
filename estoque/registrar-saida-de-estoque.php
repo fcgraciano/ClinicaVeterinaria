@@ -89,11 +89,13 @@ try {
                 $erros['lote'] = 'O lote selecionado está vencido e não pode ter saída registrada.';
             } elseif (in_array($classificacao, ['vacina', 'controle_especial'], true)) {
                 if (!preg_match('/[^\s\p{C}]/u', $numeroLote)) {
-                    $erros['lote'] = 'A saída exige um lote com número registrado.';
+                    $erros['lote'] = 'A saída de produto controlado exige um lote com número registrado.';
                 }
-                foreach ($identificacao as $campo => $valor) {
+                foreach ($camposResponsavel as $campo => [$rotulo]) {
+                    $valor = $identificacao[$campo];
                     if ($valor === '') {
-                        $erros[$campo] = 'Preencha este campo para a saída de vacina ou medicamento de controle especial.';
+                        $erros[$campo] = 'Preencha o campo "' . $rotulo . '"'
+                            . ' para registrar a saída deste produto controlado.';
                     }
                 }
             }
@@ -236,14 +238,17 @@ include __DIR__ . '/../includes/cabecalho.php';
                 <div class="invalid-feedback" id="quantidade-erro"><?= htmlspecialchars($erros['quantidade']) ?></div>
             <?php endif; ?>
         </div>
-        <fieldset class="mb-3">
+        <fieldset class="mb-3" aria-describedby="responsavel-ajuda">
             <legend class="fs-6">Responsável técnico</legend>
-            <p class="form-text">Preencha o nome e o registro profissional para vacinas e medicamentos de controle especial.</p>
+            <p class="form-text" id="responsavel-ajuda">
+                Se o lote selecionado for de vacina ou medicamento de controle especial, o nome e o registro profissional serão obrigatórios.
+            </p>
             <?php foreach ($camposResponsavel as $campo => [$rotulo, $limite]): ?>
                 <div class="mb-2">
                     <label class="form-label" for="<?= $campo ?>"><?= $rotulo ?></label>
                     <input class="form-control<?= isset($erros[$campo]) ? ' is-invalid' : '' ?>"
                         type="text" id="<?= $campo ?>" name="<?= $campo ?>" maxlength="<?= $limite ?>"
+                        <?= isset($erros[$campo]) ? 'required' : '' ?>
                         value="<?= htmlspecialchars($identificacao[$campo], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
                         <?php if (isset($erros[$campo])): ?>aria-invalid="true" aria-describedby="<?= $campo ?>-erro"<?php endif; ?>>
                     <?php if (isset($erros[$campo])): ?>
