@@ -3,11 +3,14 @@
 const formEdicao = document.querySelector('#form-edicao-produto');
 const situacaoEdicao = document.querySelector('#situacao-edicao');
 const botaoSalvar = formEdicao.querySelector('button[type="submit"]');
-const urlEdicao = new URL(formEdicao.action);
-urlEdicao.searchParams.set('id', new URLSearchParams(location.search).get('id') ?? '');
+const idProdutoEdicao = new URLSearchParams(location.search).get('id') ?? '';
+const urlConsultaEdicao = new URL('api-editar-produto.php', location.href);
+urlConsultaEdicao.searchParams.set('id', idProdutoEdicao);
+const urlProcessamentoEdicao = new URL(formEdicao.action, location.href);
+urlProcessamentoEdicao.searchParams.set('id', idProdutoEdicao);
 
-async function consultarEdicao(opcoes) {
-    const resposta = await fetch(urlEdicao, opcoes);
+async function consultarEdicao(url, opcoes) {
+    const resposta = await fetch(url, opcoes);
     const dados = await resposta.json();
     if (!resposta.ok) {
         throw new Error(dados.erro ?? 'Não foi possível acessar o produto.');
@@ -17,7 +20,7 @@ async function consultarEdicao(opcoes) {
 
 async function carregarEdicao() {
     try {
-        const dados = await consultarEdicao();
+        const dados = await consultarEdicao(urlConsultaEdicao);
         formEdicao.elements.token.value = dados.token;
         for (const nome of ['nome', 'codigo_barras', 'estoque_minimo']) {
             formEdicao.elements[nome].value = dados.produto[nome];
@@ -58,7 +61,10 @@ formEdicao.addEventListener('submit', async (evento) => {
     situacaoEdicao.className = '';
     situacaoEdicao.textContent = 'Salvando alterações…';
     try {
-        const dados = await consultarEdicao({ method: 'POST', body: new FormData(formEdicao) });
+        const dados = await consultarEdicao(urlProcessamentoEdicao, {
+            method: 'POST',
+            body: new FormData(formEdicao)
+        });
         situacaoEdicao.className = 'text-success';
         situacaoEdicao.textContent = dados.mensagem;
     } catch (erro) {

@@ -4,7 +4,7 @@
 <p id="situacao-edicao" role="status">Carregando produto…</p>
 <noscript><p>Ative o JavaScript para carregar e atualizar o produto pela API.</p></noscript>
 
-<form id="form-edicao-produto" action="api-editar-produto.php" method="post" class="col-lg-7 mb-3" hidden>
+<form id="form-edicao-produto" action="processar-edicao-produto.php" method="post" class="col-lg-7 mb-3" hidden>
     <input type="hidden" name="token">
     <div class="mb-3">
         <label class="form-label" for="nome">Nome</label>
