@@ -1,118 +1,19 @@
-<?php
-require __DIR__ . '/lotes-fefo.php';
-
-$filtros = ['produto_id' => null, 'lote_id' => null];
-$erro = '';
-$produtos = [];
-$lotes = [];
-$movimentacoes = [];
-$tipos = ['entrada' => 'Entrada', 'saida' => 'Saída', 'perda' => 'Perda', 'descarte' => 'Descarte'];
-
-foreach (array_keys($filtros) as $campo) {
-    $valor = $_GET[$campo] ?? '';
-    if ($valor === '') {
-        continue;
-    }
-    if (!is_string($valor) || !preg_match('/\A[1-9][0-9]{0,9}\z/', $valor) || $valor > 4294967295) {
-        $erro = 'Selecione um produto e um lote válidos para consultar o histórico.';
-        continue;
-    }
-    $filtros[$campo] = $valor;
-}
-
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-try {
-    require __DIR__ . '/../includes/conexao.php';
-    $resultado = mysqli_query($conexao, '
-        SELECT p.id AS produto_id, p.nome, l.id AS lote_id, l.numero_lote, f.nome AS fornecedor
-        FROM produtos p
-        LEFT JOIN lotes l ON l.produto_id = p.id
-        LEFT JOIN fornecedores f ON f.id = l.fornecedor_id
-        ORDER BY p.nome, p.id, l.numero_lote, l.id
-    ');
-    while ($linha = mysqli_fetch_assoc($resultado)) {
-        $produtos[$linha['produto_id']] = $linha['nome'];
-        if ($linha['lote_id'] !== null) {
-            $lotes[$linha['lote_id']] = [
-                'produto_id' => (string) $linha['produto_id'],
-                'rotulo' => $linha['nome'] . ' — ' . $linha['numero_lote'] . ' — ' . $linha['fornecedor'],
-            ];
-        }
-    }
-    mysqli_free_result($resultado);
-
-    $produtoId = $filtros['produto_id'];
-    $loteId = $filtros['lote_id'];
-    if ($produtoId !== null && !isset($produtos[$produtoId])) {
-        $erro = 'O produto selecionado não existe.';
-    } elseif ($loteId !== null && !isset($lotes[$loteId])) {
-        $erro = 'O lote selecionado não existe.';
-    } elseif ($produtoId !== null && $loteId !== null && $lotes[$loteId]['produto_id'] !== $produtoId) {
-        $erro = 'O lote selecionado não pertence ao produto escolhido.';
-    }
-
-    if ($erro === '') {
-        $consulta = mysqli_prepare($conexao, "
-            SELECT historico.*, saldo_depois - variacao AS saldo_antes
-            FROM (
-                SELECT m.id, m.data_movimentacao, m.tipo, m.motivo_saida, m.quantidade, m.justificativa,
-                       m.responsavel_movimentacao, m.responsavel_tecnico, m.registro_responsavel,
-                       p.nome AS produto, l.numero_lote, f.nome AS fornecedor,
-                       CASE m.tipo WHEN 'saida' THEN -CAST(m.quantidade AS DECIMAL(24,9))
-                           ELSE CAST(m.quantidade AS DECIMAL(24,9)) END AS variacao,
-                       SUM(CASE m.tipo WHEN 'saida' THEN -CAST(m.quantidade AS DECIMAL(24,9))
-                           ELSE CAST(m.quantidade AS DECIMAL(24,9)) END)
-                         OVER (PARTITION BY l.id ORDER BY m.data_movimentacao, m.id
-                               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS saldo_depois
-                FROM movimentacoes m
-                JOIN lotes l ON l.id = m.lote_id
-                JOIN produtos p ON p.id = l.produto_id
-                JOIN fornecedores f ON f.id = l.fornecedor_id
-                WHERE (? IS NULL OR p.id = ?) AND (? IS NULL OR l.id = ?)
-            ) AS historico
-            ORDER BY data_movimentacao DESC, id DESC
-        ");
-        try {
-            mysqli_stmt_bind_param($consulta, 'ssss', $produtoId, $produtoId, $loteId, $loteId);
-            mysqli_stmt_execute($consulta);
-            $resultado = mysqli_stmt_get_result($consulta);
-            $movimentacoes = mysqli_fetch_all($resultado, MYSQLI_ASSOC);
-            mysqli_free_result($resultado);
-        } finally {
-            mysqli_stmt_close($consulta);
-        }
-    }
-} catch (mysqli_sql_exception $excecao) {
-    error_log($excecao->getMessage());
-    $erro = 'Não foi possível consultar o histórico de estoque. Tente novamente.';
-}
-
-include __DIR__ . '/../includes/cabecalho.php';
+<?php include __DIR__ . '/../includes/cabecalho.php';
 ?>
 
 <h1 class="mb-3">Histórico de movimentações</h1>
 
-<form method="get" action="historico-movimentacoes.php" class="row g-3 align-items-end mb-4">
+<form id="filtros-historico" class="row g-3 align-items-end mb-4" action="historico-movimentacoes.php" method="get">
     <div class="col-md-4">
         <label class="form-label" for="produto_id">Produto</label>
         <select class="form-select" id="produto_id" name="produto_id">
             <option value="">Todos os produtos</option>
-            <?php foreach ($produtos as $id => $nome): ?>
-                <option value="<?= htmlspecialchars((string) $id) ?>" <?= $filtros['produto_id'] === (string) $id ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($nome) ?>
-                </option>
-            <?php endforeach; ?>
         </select>
     </div>
     <div class="col-md-5">
         <label class="form-label" for="lote_id">Lote</label>
         <select class="form-select" id="lote_id" name="lote_id">
             <option value="">Todos os lotes</option>
-            <?php foreach ($lotes as $id => $lote): ?>
-                <option value="<?= htmlspecialchars((string) $id) ?>" <?= $filtros['lote_id'] === (string) $id ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($lote['rotulo']) ?>
-                </option>
-            <?php endforeach; ?>
         </select>
     </div>
     <div class="col-md-auto">
@@ -120,51 +21,137 @@ include __DIR__ . '/../includes/cabecalho.php';
     </div>
 </form>
 
-<?php if ($erro !== ''): ?>
-    <div class="alert alert-danger" role="alert"><?= htmlspecialchars($erro) ?></div>
-<?php elseif (!$movimentacoes): ?>
-    <div class="alert alert-info" role="status">Nenhuma movimentação encontrada para os filtros selecionados.</div>
-<?php else: ?>
-    <div class="table-responsive mb-3">
-        <table class="table table-striped align-middle">
-            <thead>
-                <tr>
-                    <th scope="col">Data e hora</th>
-                    <th scope="col">Produto</th>
-                    <th scope="col">Lote / fornecedor</th>
-                    <th scope="col">Tipo</th>
-                    <th scope="col" class="text-end">Quantidade</th>
-                    <th scope="col">Justificativa</th>
-                    <th scope="col">Responsável registrado</th>
-                    <th scope="col" class="text-end">Saldo anterior do lote</th>
-                    <th scope="col" class="text-end">Saldo após a movimentação</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($movimentacoes as $movimentacao): ?>
-                    <?php
-                    $tipo = $movimentacao['motivo_saida'] ?? $movimentacao['tipo'];
-                    $responsavel = $movimentacao['responsavel_movimentacao'] ?? trim(
-                        ($movimentacao['responsavel_tecnico'] ?? '') . ' ' . ($movimentacao['registro_responsavel'] ?? '')
-                    );
-                    ?>
-                    <tr>
-                        <td class="text-nowrap"><?= htmlspecialchars((new DateTimeImmutable($movimentacao['data_movimentacao']))->format('d/m/Y H:i:s')) ?></td>
-                        <td><?= htmlspecialchars($movimentacao['produto']) ?></td>
-                        <td><?= htmlspecialchars($movimentacao['numero_lote'] . ' / ' . $movimentacao['fornecedor']) ?></td>
-                        <td><?= htmlspecialchars($tipos[$tipo] ?? $tipo) ?></td>
-                        <td class="text-end"><?= htmlspecialchars(formatarQuantidadeEstoque((string) $movimentacao['quantidade'])) ?></td>
-                        <td><?= nl2br(htmlspecialchars($movimentacao['justificativa'] ?? '—')) ?></td>
-                        <td><?= htmlspecialchars($responsavel !== '' ? $responsavel : '—') ?></td>
-                        <td class="text-end"><?= htmlspecialchars(formatarQuantidadeEstoque((string) $movimentacao['saldo_antes'])) ?></td>
-                        <td class="text-end"><?= htmlspecialchars(formatarQuantidadeEstoque((string) $movimentacao['saldo_depois'])) ?></td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-<?php endif; ?>
+<p id="situacao-historico" role="status" aria-live="polite">Carregando histórico…</p>
+<div id="erro-historico" class="alert alert-danger d-none" role="alert"></div>
+<div id="tabela-historico" class="table-responsive mb-3" hidden>
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Data e hora</th>
+                <th scope="col">Operador</th>
+                <th scope="col">Lote</th>
+                <th scope="col">Tipo</th>
+                <th scope="col" class="text-end">Quantidade</th>
+                <th scope="col">Justificativa</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
 
 <a class="btn btn-outline-secondary" href="index.php">Voltar ao estoque</a>
+
+<script>
+(() => {
+    const formulario = document.getElementById('filtros-historico');
+    const filtroProduto = document.getElementById('produto_id');
+    const filtroLote = document.getElementById('lote_id');
+    const situacao = document.getElementById('situacao-historico');
+    const erro = document.getElementById('erro-historico');
+    const tabela = document.getElementById('tabela-historico');
+    const corpoTabela = tabela.querySelector('tbody');
+    const tipos = { entrada: 'Entrada', saida: 'Saída', perda: 'Perda', descarte: 'Descarte' };
+    const parametros = new URLSearchParams(window.location.search);
+    let lotesDisponiveis = [];
+    let primeiraConsulta = true;
+
+    function preencher(select, itens, rotuloVazio, valorInicial, label) {
+        select.replaceChildren(new Option(rotuloVazio, ''));
+        for (const item of itens) {
+            select.add(new Option(label(item), item.id));
+        }
+        select.value = valorInicial;
+        if (select.value !== valorInicial) select.value = '';
+    }
+
+    function filtrarLotes() {
+        const produtoId = filtroProduto.value;
+        const lotes = produtoId ? lotesDisponiveis.filter((lote) => lote.produto_id === produtoId) : lotesDisponiveis;
+        const atual = filtroLote.value;
+        preencher(filtroLote, lotes, 'Todos os lotes', atual, (lote) => lote.rotulo);
+    }
+
+    function formatarQuantidade(valor) {
+        const quantidade = String(valor ?? '0');
+        return quantidade.includes('.')
+            ? quantidade.replace(/0+$/, '').replace(/\.$/, '').replace('.', ',')
+            : quantidade;
+    }
+
+    function adicionarCelula(linha, texto, cabecalho = false, alinhamento = '') {
+        const celula = document.createElement(cabecalho ? 'th' : 'td');
+        celula.textContent = texto;
+        if (cabecalho) celula.scope = 'row';
+        if (alinhamento) celula.className = alinhamento;
+        linha.append(celula);
+    }
+
+    async function consultar() {
+        erro.classList.add('d-none');
+        erro.textContent = '';
+        tabela.hidden = true;
+        corpoTabela.replaceChildren();
+        situacao.textContent = 'Consultando histórico…';
+        const url = new URL('api-historico-movimentacoes.php', window.location.href);
+        const produtoSelecionado = filtroProduto.value || (primeiraConsulta ? (parametros.get('produto_id') ?? '') : '');
+        const loteSelecionado = filtroLote.value || (primeiraConsulta ? (parametros.get('lote_id') ?? '') : '');
+        if (produtoSelecionado) url.searchParams.set('produto_id', produtoSelecionado);
+        if (loteSelecionado) url.searchParams.set('lote_id', loteSelecionado);
+
+        try {
+            const resposta = await fetch(url, { headers: { Accept: 'application/json' } });
+            const dados = await resposta.json();
+            if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível consultar o histórico.');
+
+            preencher(filtroProduto, dados.produtos, 'Todos os produtos', produtoSelecionado,
+                (produto) => produto.nome);
+            lotesDisponiveis = dados.lotes;
+            preencher(filtroLote, dados.lotes.filter((lote) => !filtroProduto.value || lote.produto_id === filtroProduto.value),
+                'Todos os lotes', loteSelecionado, (lote) => lote.rotulo);
+            filtrarLotes();
+            primeiraConsulta = false;
+
+            if (dados.movimentacoes.length === 0) {
+                situacao.textContent = 'Nenhuma movimentação encontrada para os filtros selecionados.';
+                return;
+            }
+
+            for (const movimentacao of dados.movimentacoes) {
+                const linha = document.createElement('tr');
+                const data = String(movimentacao.data_movimentacao ?? '').replace('T', ' ').split('.')[0];
+                const tipo = tipos[movimentacao.tipo_exibicao] ?? movimentacao.tipo_exibicao;
+                adicionarCelula(linha, data);
+                adicionarCelula(linha, movimentacao.operador || '—');
+                adicionarCelula(linha, `${movimentacao.produto} — ${movimentacao.numero_lote} / ${movimentacao.fornecedor}`, true);
+                adicionarCelula(linha, tipo);
+                adicionarCelula(linha, formatarQuantidade(movimentacao.quantidade), false, 'text-end');
+                adicionarCelula(linha, movimentacao.justificativa || '—');
+                corpoTabela.append(linha);
+            }
+            tabela.hidden = false;
+            situacao.textContent = `${dados.movimentacoes.length} movimentações encontradas.`;
+        } catch (falha) {
+            situacao.textContent = '';
+            erro.textContent = falha.message || 'Não foi possível consultar o histórico. Tente novamente.';
+            erro.classList.remove('d-none');
+        }
+    }
+
+    filtroProduto.addEventListener('change', filtrarLotes);
+    formulario.addEventListener('submit', (evento) => {
+        evento.preventDefault();
+        const url = new URL(window.location.href);
+        for (const campo of ['produto_id', 'lote_id']) {
+            const valor = document.getElementById(campo).value;
+            if (valor) url.searchParams.set(campo, valor);
+            else url.searchParams.delete(campo);
+        }
+        window.history.replaceState({}, '', url);
+        consultar();
+    });
+
+    consultar();
+})();
+</script>
 
 <?php include __DIR__ . '/../includes/rodape.php'; ?>
