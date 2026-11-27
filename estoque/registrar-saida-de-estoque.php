@@ -186,6 +186,18 @@ include __DIR__ . '/../includes/cabecalho.php';
 <?php endif; ?>
 
 <?php if ($lotes): ?>
+    <?php
+    $loteRecomendado = $lotes[0];
+    $validadeRecomendada = $loteRecomendado['data_validade'] === null
+        ? 'sem data de validade'
+        : 'com validade em ' . (new DateTimeImmutable($loteRecomendado['data_validade']))->format('d/m/Y');
+    ?>
+    <div class="alert alert-success" role="status">
+        <strong>Lote recomendado para saída (FEFO):</strong>
+        <?= htmlspecialchars($loteRecomendado['produto'] . ' — Lote ' . $loteRecomendado['numero_lote']) ?>,
+        <?= htmlspecialchars($validadeRecomendada) ?>.
+        A lista está ordenada pela validade mais próxima e esse lote aparece primeiro.
+    </div>
     <form method="post" action="registrar-saida-de-estoque.php" class="card card-body col-lg-6">
         <input type="hidden" name="token" value="<?= htmlspecialchars($_SESSION['saida_estoque_token']) ?>">
         <div class="mb-3">
@@ -206,6 +218,7 @@ include __DIR__ . '/../includes/cabecalho.php';
                     }
                     ?>
                     <option value="<?= htmlspecialchars((string) $lote['id']) ?>" <?= $loteId === (string) $lote['id'] ? 'selected' : '' ?>>
+                        <?= (string) $lote['id'] === (string) $loteRecomendado['id'] ? '★ Recomendado (FEFO) — ' : '' ?>
                         <?= htmlspecialchars($rotuloLote) ?>
                     </option>
                 <?php endforeach; ?>
