@@ -27,6 +27,34 @@
         <input class="form-control" type="number" id="estoque_minimo" name="estoque_minimo"
             min="0" max="4294967295" step="1" required>
     </div>
+    <fieldset class="mb-3">
+        <legend class="fs-6">Unidades e fracionamento</legend>
+        <div class="mb-3">
+            <label class="form-label" for="unidade_padrao">Unidade padrão do saldo</label>
+            <input class="form-control" id="unidade_padrao" value="Unidade" readonly aria-readonly="true">
+            <div class="form-text">O saldo do lote e as movimentações são armazenados em unidades do produto.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="fracionamento_habilitado">Permitir baixa fracionada</label>
+            <select class="form-select" id="fracionamento_habilitado" name="fracionamento_habilitado" required>
+                <option value="0">Não</option>
+                <option value="1">Sim</option>
+            </select>
+        </div>
+        <div id="unidades-fracionadas" hidden>
+            <p class="form-text">Informe quantas unidades padrão são consumidas por 1 mL ou por 1 dose. Preencha ao menos uma unidade fracionada.</p>
+            <div class="mb-3">
+                <label class="form-label" for="fator_ml">Unidade fracionada: mL — unidades padrão por 1 mL</label>
+                <input class="form-control" type="number" id="fator_ml" name="fator_ml"
+                    min="0.000001" max="1" step="0.000001" inputmode="decimal">
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="fator_dose">Unidade fracionada: dose — unidades padrão por 1 dose</label>
+                <input class="form-control" type="number" id="fator_dose" name="fator_dose"
+                    min="0.000001" max="1" step="0.000001" inputmode="decimal">
+            </div>
+        </div>
+    </fieldset>
     <button class="btn btn-primary" type="submit">Salvar alterações</button>
 </form>
 

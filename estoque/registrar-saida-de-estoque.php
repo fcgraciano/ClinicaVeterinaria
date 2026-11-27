@@ -2,7 +2,7 @@
 session_start();
 require __DIR__ . '/lotes-fefo.php';
 
-$saldo = $_SESSION['saida_estoque_saldo'] ?? null;
+$resultadoSaida = $_SESSION['saida_estoque_saldo'] ?? null;
 unset($_SESSION['saida_estoque_saldo']);
 $_SESSION['saida_estoque_token'] ??= bin2hex(random_bytes(32));
 
@@ -148,7 +148,11 @@ try {
                 mysqli_stmt_close($consulta);
                 mysqli_commit($conexao);
 
-                $_SESSION['saida_estoque_saldo'] = $saldoRestante;
+                $_SESSION['saida_estoque_saldo'] = [
+                    'saldo' => $saldoRestante,
+                    'quantidade' => formatarQuantidadeEstoque((string) $quantidade),
+                    'unidade' => $unidades[$unidade],
+                ];
                 unset($_SESSION['saida_estoque_token']);
                 header('Location: registrar-saida-de-estoque.php', true, 303);
                 exit;
@@ -171,9 +175,10 @@ include __DIR__ . '/../includes/cabecalho.php';
 
 <h1 class="mb-3">Registrar saída de estoque</h1>
 
-<?php if ($saldo !== null): ?>
+<?php if ($resultadoSaida !== null): ?>
     <div class="alert alert-success" role="status">
-        Saída registrada. Saldo do lote: <?= htmlspecialchars(formatarQuantidadeEstoque((string) $saldo)) ?> unidade(s).
+        Saída de <?= htmlspecialchars($resultadoSaida['quantidade']) ?> <?= htmlspecialchars($resultadoSaida['unidade']) ?> registrada.
+        Saldo do lote: <?= htmlspecialchars(formatarQuantidadeEstoque((string) $resultadoSaida['saldo'])) ?> unidade(s) padrão.
     </div>
 <?php endif; ?>
 <?php if ($erroBanco !== ''): ?>
@@ -205,7 +210,11 @@ include __DIR__ . '/../includes/cabecalho.php';
                         $rotuloLote .= ' — Exige responsável técnico';
                     }
                     ?>
-                    <option value="<?= htmlspecialchars((string) $lote['id']) ?>" <?= $loteId === (string) $lote['id'] ? 'selected' : '' ?>>
+                    <option value="<?= htmlspecialchars((string) $lote['id']) ?>"
+                        data-fracionamento="<?= (int) $lote['fracionamento_habilitado'] ?>"
+                        data-fator-ml="<?= htmlspecialchars((string) $lote['fator_ml']) ?>"
+                        data-fator-dose="<?= htmlspecialchars((string) $lote['fator_dose']) ?>"
+                        <?= $loteId === (string) $lote['id'] ? 'selected' : '' ?>>
                         <?= htmlspecialchars($rotuloLote) ?>
                     </option>
                 <?php endforeach; ?>
@@ -215,13 +224,14 @@ include __DIR__ . '/../includes/cabecalho.php';
             <?php endif; ?>
         </div>
         <div class="mb-3">
-            <label class="form-label" for="unidade">Unidade de medida</label>
+            <label class="form-label" for="unidade">Unidade para esta baixa</label>
             <select class="form-select<?= isset($erros['unidade']) ? ' is-invalid' : '' ?>" id="unidade" name="unidade"
                 <?php if (isset($erros['unidade'])): ?>aria-invalid="true" aria-describedby="unidade-erro"<?php endif; ?>>
                 <?php foreach ($unidades as $valor => $rotulo): ?>
-                    <option value="<?= $valor ?>" <?= $unidade === $valor ? 'selected' : '' ?>><?= $rotulo ?></option>
+                    <option value="<?= $valor ?>" <?= $unidade === $valor ? 'selected' : '' ?>><?= $valor === 'unidade' ? 'Unidade padrão' : $rotulo ?></option>
                 <?php endforeach; ?>
             </select>
+            <div class="form-text" id="unidade-ajuda">As opções fracionadas e seus fatores dependem do produto do lote selecionado. O saldo continua controlado em unidades padrão.</div>
             <?php if (isset($erros['unidade'])): ?>
                 <div class="invalid-feedback" id="unidade-erro"><?= $erros['unidade'] ?></div>
             <?php endif; ?>
@@ -265,5 +275,34 @@ include __DIR__ . '/../includes/cabecalho.php';
     <?php endforeach; ?>
     <a class="btn btn-outline-secondary" href="index.php">Voltar ao estoque</a>
 <?php endif; ?>
+
+<script>
+(() => {
+    const lotes = document.getElementById('lote_id');
+    const unidade = document.getElementById('unidade');
+    if (!lotes || !unidade) return;
+
+    const opcoesFracionadas = {
+        ml: { atributo: 'fatorMl', rotulo: 'mL' },
+        dose: { atributo: 'fatorDose', rotulo: 'Dose' }
+    };
+
+    function atualizarUnidades() {
+        const lote = lotes.selectedOptions[0];
+        for (const [valor, dados] of Object.entries(opcoesFracionadas)) {
+            const opcao = unidade.querySelector(`option[value="${valor}"]`);
+            const fator = lote?.dataset.fracionamento === '1' ? lote.dataset[dados.atributo] : '';
+            opcao.disabled = !fator || Number(fator) <= 0;
+            opcao.textContent = fator && Number(fator) > 0
+                ? `${dados.rotulo} fracionado (${fator} unidade(s) padrão por ${dados.rotulo})`
+                : `${dados.rotulo} (não configurado para este produto)`;
+            if (opcao.disabled && opcao.selected) unidade.value = 'unidade';
+        }
+    }
+
+    lotes.addEventListener('change', atualizarUnidades);
+    atualizarUnidades();
+})();
+</script>
 
 <?php include __DIR__ . '/../includes/rodape.php'; ?>

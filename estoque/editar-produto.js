@@ -3,6 +3,10 @@
 const formEdicao = document.querySelector('#form-edicao-produto');
 const situacaoEdicao = document.querySelector('#situacao-edicao');
 const botaoSalvar = formEdicao.querySelector('button[type="submit"]');
+const seletorFracionamento = formEdicao.elements.fracionamento_habilitado;
+const camposFracionados = document.querySelector('#unidades-fracionadas');
+const campoFatorMl = formEdicao.elements.fator_ml;
+const campoFatorDose = formEdicao.elements.fator_dose;
 const urlEdicao = new URL(formEdicao.action);
 urlEdicao.searchParams.set('id', new URLSearchParams(location.search).get('id') ?? '');
 
@@ -22,6 +26,11 @@ async function carregarEdicao() {
         for (const nome of ['nome', 'codigo_barras', 'estoque_minimo']) {
             formEdicao.elements[nome].value = dados.produto[nome];
         }
+        formEdicao.elements.unidade_padrao.value = dados.unidade_padrao === 'unidade' ? 'Unidade' : dados.unidade_padrao;
+        seletorFracionamento.value = String(Number(dados.produto.fracionamento_habilitado));
+        campoFatorMl.value = dados.produto.fator_ml ?? '';
+        campoFatorDose.value = dados.produto.fator_dose ?? '';
+        atualizarCamposFracionamento();
         for (const categoria of dados.categorias) {
             formEdicao.elements.categoria_id.add(new Option(categoria.nome, categoria.id));
         }
@@ -51,6 +60,20 @@ async function carregarEdicao() {
         situacaoEdicao.textContent = erro instanceof SyntaxError ? 'Não foi possível carregar o produto.' : erro.message;
     }
 }
+
+function atualizarCamposFracionamento() {
+    const habilitado = seletorFracionamento.value === '1';
+    camposFracionados.hidden = !habilitado;
+    campoFatorMl.disabled = !habilitado;
+    campoFatorDose.disabled = !habilitado;
+    const nenhumFatorInformado = campoFatorMl.value === '' && campoFatorDose.value === '';
+    campoFatorMl.required = habilitado && nenhumFatorInformado;
+    campoFatorDose.required = habilitado && nenhumFatorInformado;
+}
+
+seletorFracionamento.addEventListener('change', atualizarCamposFracionamento);
+campoFatorMl.addEventListener('input', atualizarCamposFracionamento);
+campoFatorDose.addEventListener('input', atualizarCamposFracionamento);
 
 formEdicao.addEventListener('submit', async (evento) => {
     evento.preventDefault();

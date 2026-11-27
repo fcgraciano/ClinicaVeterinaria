@@ -40,14 +40,34 @@ if ($metodo === 'POST') {
     $codigo = is_string($_POST['codigo_barras'] ?? null) ? trim($_POST['codigo_barras']) : '';
     $categoria = $_POST['categoria_id'] ?? '';
     $minimo = $_POST['estoque_minimo'] ?? '';
+    $fracionamentoHabilitado = $_POST['fracionamento_habilitado'] ?? '';
+    $fatorMl = $_POST['fator_ml'] ?? '';
+    $fatorDose = $_POST['fator_dose'] ?? '';
     $fornecedores = $_POST['fornecedores'] ?? [];
+
+    $fatorValido = static function ($valor): bool {
+        return is_string($valor) && preg_match('/\A(?:0?\.[0-9]{1,6}|1(?:\.0{1,6})?)\z/', $valor)
+            && (float) $valor > 0 && (float) $valor <= 1;
+    };
+
+    if ($fracionamentoHabilitado === '0') {
+        $fatorMl = null;
+        $fatorDose = null;
+    } elseif ($fracionamentoHabilitado === '1') {
+        $fatorMl = $fatorMl === '' ? null : $fatorMl;
+        $fatorDose = $fatorDose === '' ? null : $fatorDose;
+    }
 
     if (!preg_match('/\A[^\p{C}]{1,150}\z/u', $nome)
         || !preg_match('/\A[^\s\p{C}]{1,50}\z/u', $codigo)
         || !idValidoEdicao($categoria)
         || !is_string($minimo) || !preg_match('/\A[0-9]{1,10}\z/', $minimo) || $minimo > 4294967295
+        || !in_array($fracionamentoHabilitado, ['0', '1'], true)
+        || ($fracionamentoHabilitado === '1' && !($fatorValido($fatorMl) || $fatorValido($fatorDose)))
+        || ($fracionamentoHabilitado === '1' && $fatorMl !== null && !$fatorValido($fatorMl))
+        || ($fracionamentoHabilitado === '1' && $fatorDose !== null && !$fatorValido($fatorDose))
         || !is_array($fornecedores)) {
-        responderEdicao(422, ['erro' => 'Confira o nome, código de barras, categoria e estoque mínimo.']);
+        responderEdicao(422, ['erro' => 'Confira os dados do produto e os fatores de conversão do fracionamento.']);
     }
     foreach ($fornecedores as $fornecedor) {
         if (!idValidoEdicao($fornecedor)) {
@@ -65,7 +85,9 @@ try {
         mysqli_begin_transaction($conexao);
     }
     try {
-        $sql = 'SELECT id, nome, codigo_barras, categoria_id, estoque_minimo FROM produtos WHERE id = ?';
+        $sql = 'SELECT id, nome, codigo_barras, categoria_id, estoque_minimo,
+                       fracionamento_habilitado, fator_ml, fator_dose
+                FROM produtos WHERE id = ?';
         if ($metodo === 'POST') {
             $sql .= ' FOR UPDATE';
         }
@@ -95,13 +117,16 @@ try {
         if ($metodo === 'GET') {
             $categorias = mysqli_fetch_all(mysqli_query($conexao, 'SELECT id, nome FROM categorias ORDER BY nome, id'), MYSQLI_ASSOC);
             $opcoes = mysqli_fetch_all(mysqli_query($conexao, 'SELECT id, nome FROM fornecedores ORDER BY nome, id'), MYSQLI_ASSOC);
-            responderEdicao(200, ['produto' => $produto, 'categorias' => $categorias, 'fornecedores' => $opcoes,
+            responderEdicao(200, ['produto' => $produto, 'unidade_padrao' => 'unidade',
+                'categorias' => $categorias, 'fornecedores' => $opcoes,
                 'fornecedores_ids' => $atuais, 'token' => $token]);
         }
 
         $consulta = mysqli_prepare($conexao,
-            'UPDATE produtos SET nome = ?, codigo_barras = ?, categoria_id = ?, estoque_minimo = ? WHERE id = ?');
-        mysqli_stmt_bind_param($consulta, 'sssss', $nome, $codigo, $categoria, $minimo, $id);
+            'UPDATE produtos SET nome = ?, codigo_barras = ?, categoria_id = ?, estoque_minimo = ?,
+                fracionamento_habilitado = ?, fator_ml = ?, fator_dose = ? WHERE id = ?');
+        mysqli_stmt_bind_param($consulta, 'ssssssss', $nome, $codigo, $categoria, $minimo,
+            $fracionamentoHabilitado, $fatorMl, $fatorDose, $id);
         mysqli_stmt_execute($consulta);
         mysqli_stmt_close($consulta);
 
